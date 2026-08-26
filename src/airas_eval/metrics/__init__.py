@@ -1,23 +1,15 @@
 from airas_eval.metrics import (
     classification,
-    clustering,
-    complexity,
-    nlp,
-    ranking,
+    pareto,
     regression,
-    stats,
-    structure,
-    vision,
+    search,
+    selection,
 )
 
 __all__ = [
     "classification",
-    "clustering",
-    "complexity",
-    "nlp",
-    "ranking",
+    "pareto",
     "regression",
-    "stats",
-    "structure",
-    "vision",
+    "search",
+    "selection",
 ]

@@ -1,6 +1,6 @@
 [project]
 name = "airas-eval"
-version = "0.1.0"
+version = "0.2.0"
 description = "Standard evaluation-metric implementations for AIRAS: a trusted, versioned scoring layer computed from raw predictions"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -9,15 +9,8 @@ dependencies = [
     "numpy>=1.26",
     "scikit-learn>=1.5",
     "scipy>=1.11",
+    "pydantic>=2.7",
 ]
-
-[project.optional-dependencies]
-# Wrappers around community-accepted reference implementations. These are the
-# canonical scorers for their domains; airas-eval deliberately does not
-# reimplement them.
-nlp = ["sacrebleu>=2.4", "rouge-score>=0.1.2"]
-structure = ["DockQ>=2.1", "tmtools>=0.2"]
-complexity = ["torch>=2.2", "fvcore>=0.1.5"]
 
 [project.scripts]
 airas-eval = "airas_eval.cli:main"
@@ -53,14 +46,8 @@ mypy_path = "src"
 
 [[tool.mypy.overrides]]
 module = [
-    "sacrebleu.*",
-    "rouge_score.*",
-    "DockQ.*",
-    "tmtools.*",
     "sklearn.*",
     "scipy.*",
-    "fvcore.*",
-    "torch.*",
 ]
 ignore_missing_imports = true
 

@@ -26,3 +26,8 @@ jobs:
         run: uv run mypy src
       - name: Test
         run: uv run pytest -q
+      - name: Build and smoke-test the wheel as a consumer would
+        run: |
+          uv build
+          uvx --from dist/*.whl airas-eval list
+          uvx --from dist/*.whl airas-eval score nas_search --inputs examples/nas_search.json

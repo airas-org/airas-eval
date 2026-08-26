@@ -2,7 +2,7 @@
 
 scikit-learn is the community-canonical implementation for these metrics;
 airas-eval adds fail-closed input validation and pins the ambiguous variants
-(averaging mode is an explicit argument; the suite layer reports all of them).
+(averaging mode is an explicit argument; the task layer reports all of them).
 The only in-house computation is ECE, which has no canonical torch-free
 implementation.
 """
@@ -15,7 +15,7 @@ from sklearn import metrics as _skm
 
 from airas_eval.metrics._validate import binary_scores, paired_1d, probs_2d
 
-Average = Literal["micro", "macro", "weighted"]
+Average = Literal["binary", "micro", "macro", "weighted"]
 
 
 def accuracy(predicted: Sequence[int], reference: Sequence[int]) -> float:
@@ -113,7 +113,7 @@ def expected_calibration_error(
     """ECE, in-house: equal-width confidence bins over the argmax prediction.
 
     No canonical torch-free implementation exists; the binning variant is fixed
-    here (equal-width, top-1 confidence, L1) and stated in the suite signature.
+    here (equal-width, top-1 confidence, L1) and stated in the task signature.
     """
     probs, y_true = probs_2d(probabilities, reference)
     confidence = probs.max(axis=1)

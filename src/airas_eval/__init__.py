@@ -1,5 +1,7 @@
-__version__ = "0.1.0"
+from importlib.metadata import version as _version
 
-from airas_eval.suite import EvaluationReport, evaluate  # noqa: E402
+__version__ = _version("airas-eval")
+
+from airas_eval.evaluator import EvaluationReport, evaluate  # noqa: E402
 
 __all__ = ["EvaluationReport", "__version__", "evaluate"]

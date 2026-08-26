@@ -13,6 +13,7 @@ import numpy as np
 from scipy import stats as _stats
 from sklearn import metrics as _skm
 
+from airas_eval.exceptions import UndefinedMetric
 from airas_eval.metrics._validate import paired_1d
 
 
@@ -35,7 +36,7 @@ def mape(predicted: Sequence[float], reference: Sequence[float]) -> float:
     """Strict MAPE: undefined (raises) when any reference value is zero."""
     y_pred, y_true = paired_1d(predicted, reference, dtype=float)
     if np.any(y_true == 0):
-        raise ValueError("MAPE is undefined when a reference value is zero")
+        raise UndefinedMetric("MAPE is undefined when a reference value is zero")
     return float(np.mean(np.abs((y_pred - y_true) / y_true)))
 
 
@@ -44,35 +45,37 @@ def smape(predicted: Sequence[float], reference: Sequence[float]) -> float:
     y_pred, y_true = paired_1d(predicted, reference, dtype=float)
     denom = np.abs(y_pred) + np.abs(y_true)
     if np.any(denom == 0):
-        raise ValueError("sMAPE is undefined when pred and true are both zero")
+        raise UndefinedMetric("sMAPE is undefined when pred and true are both zero")
     return float(np.mean(2.0 * np.abs(y_pred - y_true) / denom))
 
 
 def r2_score(predicted: Sequence[float], reference: Sequence[float]) -> float:
     y_pred, y_true = paired_1d(predicted, reference, dtype=float)
     if float(np.var(y_true)) == 0.0:
-        raise ValueError("R^2 is undefined for a constant reference")
+        raise UndefinedMetric("R^2 is undefined for a constant reference")
     return float(_skm.r2_score(y_true, y_pred))
 
 
 def explained_variance(predicted: Sequence[float], reference: Sequence[float]) -> float:
     y_pred, y_true = paired_1d(predicted, reference, dtype=float)
     if float(np.var(y_true)) == 0.0:
-        raise ValueError("explained variance is undefined for a constant reference")
+        raise UndefinedMetric(
+            "explained variance is undefined for a constant reference"
+        )
     return float(_skm.explained_variance_score(y_true, y_pred))
 
 
 def pearson_r(predicted: Sequence[float], reference: Sequence[float]) -> float:
     y_pred, y_true = paired_1d(predicted, reference, dtype=float)
     if np.std(y_pred) == 0 or np.std(y_true) == 0:
-        raise ValueError("Pearson r is undefined for a constant input")
+        raise UndefinedMetric("Pearson r is undefined for a constant input")
     return float(_stats.pearsonr(y_pred, y_true).statistic)
 
 
 def spearman_rho(predicted: Sequence[float], reference: Sequence[float]) -> float:
     y_pred, y_true = paired_1d(predicted, reference, dtype=float)
     if np.std(y_pred) == 0 or np.std(y_true) == 0:
-        raise ValueError("Spearman rho is undefined for a constant input")
+        raise UndefinedMetric("Spearman rho is undefined for a constant input")
     return float(_stats.spearmanr(y_pred, y_true).statistic)
 
 
@@ -80,5 +83,5 @@ def kendall_tau(predicted: Sequence[float], reference: Sequence[float]) -> float
     """Kendall's tau-b (scipy default variant)."""
     y_pred, y_true = paired_1d(predicted, reference, dtype=float)
     if np.std(y_pred) == 0 or np.std(y_true) == 0:
-        raise ValueError("Kendall tau is undefined for a constant input")
+        raise UndefinedMetric("Kendall tau is undefined for a constant input")
     return float(_stats.kendalltau(y_pred, y_true).statistic)

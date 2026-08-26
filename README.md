@@ -5,113 +5,118 @@ agents pass a task type and raw predictions, and get the full standard metric
 suite back. Agents never implement evaluation scripts and never choose which
 metrics (or which variants) get reported.
 
-## The model
+## Structure
+
+Two layers, and nothing a caller can choose between them:
+
+1. **`metrics/`** — metric implementations, one module per input shape, no
+   task knowledge. Delegated to scikit-learn / scipy wherever a canonical
+   implementation exists; in-house only where none does (ECE, regret,
+   top-k selection, 2-D hypervolume, IGD/GD/spacing), pinned and
+   property-tested.
+2. **`tasks/`** — one sub-package per area, one module per task type. A task
+   type is the full set of metrics a study of that kind must report (5–11
+   of them, each with its variant pinned), computed from one validated input
+   group. The reusable pieces between the layers (`tasks/_bundles.py`) are
+   plain constants: not registered, not evaluable on their own.
+
+```
+tasks/
+├── generic/   classification, binary_classification, search, candidate_ranking, multiobjective
+└── nas/       nas_search, nas_architecture, nas_predictor, nas_tradeoff
+```
+
+## What does each task return?
+
+Two sources, both derived from the registry so they cannot drift from
+behavior:
+
+```bash
+airas-eval list                # every task type: inputs, metrics, curves, summary, signature
+airas-eval list nas_search     # one task type
+```
+
+and a generated README per area, checked by the test suite:
+[`tasks/generic/README.md`](src/airas_eval/tasks/generic/README.md),
+[`tasks/nas/README.md`](src/airas_eval/tasks/nas/README.md).
+Regenerate with `python -m airas_eval.tasks.readme` after changing a task or
+bundle.
+
+## Usage
 
 ```python
 from airas_eval import evaluate
 
 report = evaluate(
-    "classification",
-    {
-        "predicted_labels": y_pred,
-        "reference_labels": y_true,
-        "probabilities": probs,  # optional
-    },
+    "nas_search",
+    {"main": {"evaluated_scores": scores_in_order, "oracle_best": 94.37}},
 )
-report.metrics  # every standard metric at pinned variants
-report.skipped  # metrics that don't apply, each with a reason
-report.provenance  # suite signature, resolved package versions, input SHA-256
+report.metrics  # {"main.best_score": ..., "main.final_regret": ..., ...}
+report.curves  # {"main.best_so_far": [...]}
+report.inputs_summary  # {"main.n_evaluations": 200}  — sizes, kept apart from metrics
+report.skipped  # what didn't apply — machine-readable code + reason
+report.omitted_optional_inputs  # e.g. ["main.oracle_best"]
+report.provenance  # derived task signature, versions, input SHA-256
 ```
-
-Or as a process boundary, for trusted scoring jobs:
 
 ```bash
-airas-eval score classification --inputs inputs.json --output evaluation.json
-airas-eval list   # what suites exist and what inputs they take
+airas-eval score nas_search --inputs inputs.json --output evaluation.json
 ```
 
-Design rules, in order of importance:
+Inputs are always grouped (`{"main": {...}}`); a task type is the only thing
+the caller chooses, and which task type a study is evaluated as belongs to
+the research plan, not to the evaluation step.
 
-1. **No metric choice.** A suite computes *all* standard metrics for the task
-   type. F1 is reported as macro *and* micro *and* weighted. Reporting
-   everything is what removes the cherry-picking degree of freedom.
-2. **No agent-written metric code.** Computation is delegated to the
-   community-canonical implementation for each metric — scikit-learn / scipy
-   for the classic ML metrics, `sacrebleu` for BLEU/chrF, Google's
-   `rouge-score` for ROUGE, official `DockQ` v2, `tmtools` for TM-score,
-   `fvcore` for MACs. airas-eval implements a metric itself only when no
-   canonical pip implementation exists (ECE, SQuAD-style EM/F1, ranking@k,
-   Kabsch RMSD), and pins the variant explicitly.
-3. **Nothing disappears silently.** A metric that cannot be computed on the
-   given inputs (missing probabilities, not binary, missing optional
-   dependency, mathematically undefined) appears under `skipped` with a
-   reason. Unknown task types, unknown input keys, and missing required inputs
-   raise.
-4. **Every report carries provenance.** The suite signature (task type +
-   pinned variants), the resolved versions of the packages that actually
-   computed the numbers, and a SHA-256 of the inputs. Pin airas-eval by commit
-   in the scoring job and a reported score is reproducible as
-   `(inputs, airas-eval@version) -> metrics`.
+## Design rules
 
-What this library does *not* claim: it cannot force agents to call it, and it
-does not verify that the predictions themselves are genuine (that they came
-from the claimed model run, or cover the full test split). Those guarantees
-belong to the surrounding infrastructure — a scoring job the agent cannot
-edit, and input-provenance verification — which consume this library.
+1. **No metric choice.** A task type computes *all* its metrics; the set is
+   fixed and small enough to read, because a long list is its own kind of
+   cherry-picking surface. Variants (averaging, k, bins) are pinned per
+   task, and every parameter a metric function takes must be pinned
+   explicitly (enforced by test). Input sizes (`n_examples`,
+   `n_evaluations`, ...) are reported under `inputs_summary`, apart from
+   metrics, so a subsetted test set or a truncated run is visible.
+2. **Nothing disappears silently.** A metric that cannot be computed appears
+   under `skipped` with a machine-readable code (`missing_optional_input`,
+   `not_applicable`, `undefined_on_data`, `missing_dependency`); omitted
+   optional inputs are surfaced per report.
+   Only these dedicated cases become skips — malformed inputs and library
+   bugs raise instead of hiding as "undefined".
+3. **Provenance is derived, never hand-written.** The task signature is a
+   hash of the task's declaration (metric names, function identities,
+   pinned kwargs, input fields), so it cannot drift from behavior. The
+   per-area READMEs are generated from the same declaration.
+4. **Reference data is fixed upstream.** `reference_labels`, `oracle_best`,
+   and reference points/fronts belong to the experimental design. This
+   library cannot verify they are genuine, and cannot defend itself inside
+   an agent-controlled process — run `airas-eval score` from a pinned
+   environment the agent cannot edit.
 
 ## Install
 
 ```bash
-uv add airas-eval                       # core: numpy, scikit-learn, scipy
-uv add "airas-eval[nlp]"                # + sacrebleu, rouge-score
-uv add "airas-eval[structure]"          # + DockQ, tmtools
-uv add "airas-eval[complexity]"         # + torch, fvcore (params / MACs)
+uv add airas-eval   # numpy, scikit-learn, scipy, pydantic
 ```
-
-## Suites
-
-| Task type | Required inputs | Optional | Metrics |
-|---|---|---|---|
-| `classification` | predicted_labels, reference_labels | probabilities | accuracy, error rate, P/R/F1 (macro+micro+weighted), balanced accuracy, MCC, Cohen's kappa; with probabilities: log loss, ECE, top-5; binary only: AUROC, average precision, Brier |
-| `regression` | predicted_values, reference_values | — | MSE, RMSE, MAE, MAPE (strict), sMAPE, R², explained variance, Pearson, Spearman, Kendall tau-b |
-| `clustering` | predicted_labels, reference_labels | — | ARI, NMI, AMI, V-measure |
-| `retrieval` | ranked_lists, relevant_sets | relevances | P@1/5/10, R@5/10, MRR, MAP, nDCG@10 |
-| `text_qa` | predicted_texts, reference_texts | — | exact match, token F1 (SQuAD normalization) |
-| `text_generation` | predicted_texts, reference_texts | — | BLEU, chrF (sacrebleu), ROUGE-L (rouge-score) |
-| `segmentation` | predicted_mask, reference_mask | — | pixel accuracy, mIoU, Dice |
-| `structure_comparison` | predicted_coords, reference_coords | reference_sequence | RMSD (Kabsch), RMSD w/o superposition, TM-score (tmtools) |
-
-The underlying metric functions (`airas_eval.metrics.*`) remain importable for
-trusted-side use, along with statistical helpers (`stats.mean_std`,
-`stats.bootstrap_ci`, `stats.paired_permutation_test`) and model-complexity
-utilities (`complexity.parameter_count`, `complexity.macs`).
-
-## Roadmap
-
-- lDDT / lDDT-PLI as an [OpenStructure](https://openstructure.org/) wrapper
-  (reference implementation; conda/container only, hence not yet an extra).
-- COCO mAP as a `pycocotools` wrapper; DockQ suite for structure files.
-- SSIM (window/data-range conventions), CRPS (`properscoring`), MASE.
-- NAS suite: architecture-level scoring (params/MACs from a spec) and
-  benchmark-oracle protocols.
-
-Out of scope by design: pLDDT and other self-reported model confidences (they
-compare against no reference), latency/memory benchmarking (hardware-dependent),
-and verifying the authenticity of prediction inputs (an infrastructure concern,
-not a metric concern).
 
 ## Development
 
 ```bash
 uv sync
+uv run ruff format --check .
 uv run ruff check .
 uv run mypy src
 uv run pytest
 ```
 
-Core metric outputs are tested for parity against scikit-learn / scipy,
-including tie handling; the suite layer is tested for its contract (fail-closed
-inputs, explicit skips, provenance determinism).
+Adding a task type = one module under `tasks/<area>/` defining `TASK` from
+an existing bundle, one line in the area's `TASKS`, then
+`python -m airas_eval.tasks.readme`. A new area = a new sub-package plus one
+line in `tasks.AREAS`. Adding a bundle = an input model in `tasks/_inputs.py`
+and a `Bundle` in `tasks/_bundles.py` with a `summary` count. Keep tasks at
+roughly 5–10 metrics: standard variants only, one pin per parameter. Registration is deliberately explicit (no entry points, no
+scanning): in a trust layer, what gets computed must be visible in a
+reviewed diff. New in-house metrics need parity tests against an oracle
+implementation, or hand-computed cases plus property tests.
 
 ## License
 
