@@ -180,21 +180,86 @@ def test_undefined_metric_is_skipped_with_code():
     assert report.skipped["main.kendall_tau"]["code"] == "undefined_on_data"
 
 
-def test_nas_tasks_share_contracts_with_generic_tasks():
+NAS_SEARCH_FULL = {
+    **SEARCH_FULL,
+    "evaluation_costs": [100.0, 200.0, 100.0, 300.0],
+    "search_space_scores": [80.0, 88.0, 90.0, 91.2, 93.1, 94.37, 85.0, 70.0],
+    "final_test_score": 92.5,
+    "oracle_test_best": 94.0,
+}
+
+
+def test_nas_tasks_are_supersets_of_generic_tasks():
     pairs = {
         "nas_search": ("search", SEARCH_FULL),
         "nas_architecture": ("classification", CLS_FULL),
         "nas_predictor": ("candidate_ranking", RANK_SMALL),
-        "nas_tradeoff": ("multiobjective", MOO),
     }
     for nas_task, (generic_task, inputs) in pairs.items():
         a = evaluate(nas_task, {"main": inputs})
         b = evaluate(generic_task, {"main": inputs})
-        assert a.metrics == b.metrics
-        assert a.skipped == b.skipped
-        assert a.inputs_summary == b.inputs_summary
+        # same numbers for the shared metrics ...
+        assert all(a.metrics[k] == b.metrics[k] for k in b.metrics)
+        # ... and the NAS extras exist in the report as coded skips, since the
+        # generic inputs carry none of the NAS reference data
+        declared_a = set(a.metrics) | set(a.skipped)
+        declared_b = set(b.metrics) | set(b.skipped)
+        assert declared_a > declared_b, nas_task
+        # NAS-specific blocks were not provided: reported, not silently absent
         assert a.provenance["task_signature"].startswith(f"{nas_task}/v1@")
-        assert a.provenance["task_signature"] != b.provenance["task_signature"]
+
+
+def test_nas_search_specific_metrics():
+    report = evaluate("nas_search", {"main": NAS_SEARCH_FULL})
+    m = report.metrics
+    assert m["main.cost_to_best"] == 700.0
+    assert m["main.search_space_fraction_better"] == pytest.approx(1 / 8)
+    assert m["main.test_regret"] == pytest.approx(1.5)
+    assert m["main.gain_over_random_search"] > 0  # beat a 4-draw random baseline
+    assert m["main.relative_improvement_over_random"] == pytest.approx(
+        (93.1 - 86.45875) / 86.45875
+    )
+    assert report.curves["main.best_so_far_vs_cost"][-1] == [700.0, 93.1]
+    assert report.inputs_summary["main.total_cost"] == 700.0
+    assert report.inputs_summary["main.n_search_space"] == 8
+    assert report.omitted_optional_inputs == []
+    with pytest.raises(ValueError, match="one entry per evaluated score"):
+        evaluate(
+            "nas_search",
+            {"main": {**SEARCH_FULL, "evaluation_costs": [1.0]}},
+        )
+    with pytest.raises(ValueError, match="given together"):
+        evaluate("nas_search", {"main": {**SEARCH_FULL, "final_test_score": 1.0}})
+
+
+def test_nas_architecture_random_baseline():
+    inputs = {**CLS_NO_PROBS, "random_architecture_accuracies": [0.2, 0.3, 0.4]}
+    report = evaluate("nas_architecture", {"main": inputs})
+    acc = report.metrics["main.accuracy"]
+    assert report.metrics["main.relative_improvement_over_random"] == pytest.approx(
+        (acc - 0.3) / 0.3
+    )
+    assert report.metrics["main.fraction_of_random_better"] == 0.0
+    assert report.inputs_summary["main.n_random_architectures"] == 3
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        evaluate(
+            "nas_architecture",
+            {"main": {**CLS_NO_PROBS, "random_architecture_accuracies": [70.0]}},
+        )
+
+
+def test_nas_predictor_top_fraction_correlations():
+    ref = [float(i) for i in range(40)]
+    pred = ref[:]
+    pred[35], pred[39] = pred[39], pred[35]  # swap two of the true top-10%
+    report = evaluate(
+        "nas_predictor", {"main": {"predicted_scores": pred, "reference_scores": ref}}
+    )
+    assert (
+        report.metrics["main.kendall_tau"]
+        > report.metrics["main.kendall_tau_top_10pct"]
+    )
+    assert report.metrics["main.spearman_rho_top_10pct"] < 1.0
 
 
 def test_provenance_signature_and_hashes():
@@ -238,16 +303,17 @@ def test_every_task_reports_input_sizes_outside_metrics():
     for task_type, task in TASKS.items():
         for group in task.groups:
             summary = [b.name for b in group.bundle.summary]
-            assert summary and all(n.startswith("n_") for n in summary), task_type
-            assert not any(b.name.startswith("n_") for b in group.bundle.metrics), (
+            sizes = ("n_", "total_")
+            assert summary and all(n.startswith(sizes) for n in summary), task_type
+            assert not any(b.name.startswith(sizes) for b in group.bundle.metrics), (
                 task_type
             )
 
 
-def test_every_task_is_between_three_and_eleven_metrics():
+def test_every_task_is_between_five_and_eleven_metrics():
     for task_type, task in TASKS.items():
         n = sum(len(g.bundle.metrics) for g in task.groups)
-        assert 3 <= n <= 11, (task_type, n)
+        assert 5 <= n <= 11, (task_type, n)
 
 
 def test_version_comes_from_installed_metadata():

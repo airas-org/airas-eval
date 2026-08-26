@@ -10,10 +10,12 @@ stable input order, so results are deterministic for identical inputs.
 """
 
 from collections.abc import Sequence
+from typing import Literal
 
 import numpy as np
 
 from airas_eval.exceptions import UndefinedMetric
+from airas_eval.metrics import regression as _reg
 from airas_eval.metrics._validate import paired_1d
 
 
@@ -76,3 +78,29 @@ def selection_regret_at_k(
     pred, ref = paired_1d(predicted_scores, reference_scores, dtype=float)
     _check_k(k, len(pred))
     return float(ref.max() - ref[_top_k_indices(pred, k)].max())
+
+
+def rank_correlation_top_fraction(
+    predicted_scores: Sequence[float],
+    reference_scores: Sequence[float],
+    fraction: float,
+    method: Literal["kendall", "spearman"],
+) -> float:
+    """Rank correlation restricted to the candidates whose TRUE score is in the
+    top ``fraction``: does the predictor still order the good ones correctly?
+
+    Standard alongside global correlation for zero-cost proxies and
+    performance predictors (NAS-Bench-Suite-Zero). Undefined when the top set
+    has fewer than two candidates or a constant input.
+    """
+    pred, ref = paired_1d(predicted_scores, reference_scores, dtype=float)
+    if not 0.0 < fraction <= 1.0:
+        raise ValueError(f"fraction must be in (0, 1], got {fraction}")
+    k = int(len(ref) * fraction)
+    if k < 2:
+        raise UndefinedMetric(
+            f"the top {fraction:.0%} of {len(ref)} candidates has fewer than 2 members"
+        )
+    top = _top_k_indices(ref, k)
+    fn = _reg.kendall_tau if method == "kendall" else _reg.spearman_rho
+    return fn(pred[top], ref[top])

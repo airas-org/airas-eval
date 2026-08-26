@@ -1,10 +1,10 @@
 """Neural architecture search: one task per kind of claim a NAS study makes.
 
-Each is a branch with its own evaluation data (a benchmark run, a trained
-architecture, a predictor, a trade-off front), not a bag of everything NAS
-might report — keeping each task small keeps the report legible.
+Each task is the corresponding generic task plus what the NAS literature
+adds (see ``_bundles``). Trade-off fronts have nothing NAS-specific: use the
+generic ``multiobjective`` task.
 """
 
-from airas_eval.tasks.nas import architecture, predictor, search, tradeoff
+from airas_eval.tasks.nas import architecture, predictor, search
 
-TASKS = (search.TASK, architecture.TASK, predictor.TASK, tradeoff.TASK)
+TASKS = (search.TASK, architecture.TASK, predictor.TASK)

@@ -41,6 +41,48 @@ def mean_evaluated_score(evaluated_scores: Sequence[float]) -> float:
     return float(_scores_1d(evaluated_scores).mean())
 
 
+def _costs_1d(
+    evaluated_scores: Sequence[float], evaluation_costs: Sequence[float]
+) -> np.ndarray:
+    scores = _scores_1d(evaluated_scores)
+    costs = _scores_1d(evaluation_costs, "evaluation_costs")
+    if len(costs) != len(scores):
+        raise ValueError(f"length mismatch: {len(scores)} scores vs {len(costs)} costs")
+    if np.any(costs < 0):
+        raise ValueError("evaluation_costs must be non-negative")
+    return costs
+
+
+def total_cost(
+    evaluated_scores: Sequence[float], evaluation_costs: Sequence[float]
+) -> float:
+    """Sum of per-evaluation costs: the estimated wall-clock budget consumed."""
+    return float(_costs_1d(evaluated_scores, evaluation_costs).sum())
+
+
+def cost_to_best(
+    evaluated_scores: Sequence[float], evaluation_costs: Sequence[float]
+) -> float:
+    """Cumulative cost spent when the final best score was first reached.
+
+    The cost-axis counterpart of ``evaluations_to_best``: NAS benchmarks plot
+    the incumbent against estimated training time, not against the number
+    of architectures evaluated.
+    """
+    costs = _costs_1d(evaluated_scores, evaluation_costs)
+    idx = int(np.argmax(np.asarray(evaluated_scores, dtype=float)))
+    return float(np.cumsum(costs)[idx])
+
+
+def best_so_far_vs_cost(
+    evaluated_scores: Sequence[float], evaluation_costs: Sequence[float]
+) -> list[list[float]]:
+    """``[[cumulative_cost, incumbent], ...]`` after each evaluation."""
+    costs = _costs_1d(evaluated_scores, evaluation_costs)
+    incumbent = best_so_far(evaluated_scores)
+    return [[float(c), v] for c, v in zip(np.cumsum(costs), incumbent, strict=True)]
+
+
 def _check_oracle(best: float, oracle_best: float) -> None:
     # A score above the known optimum means the inputs are inconsistent with
     # the benchmark. That is an integrity failure of the whole evaluation,

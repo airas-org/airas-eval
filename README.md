@@ -17,13 +17,19 @@ Two layers, and nothing a caller can choose between them:
 2. **`tasks/`** — one sub-package per area, one module per task type. A task
    type is the full set of metrics a study of that kind must report (5–11
    of them, each with its variant pinned), computed from one validated input
-   group. The reusable pieces between the layers (`tasks/_bundles.py`) are
-   plain constants: not registered, not evaluable on their own.
+   group. `generic/` holds the core evaluation families; an area package
+   (`nas/`) builds on them — its bundles are *the core bindings plus what
+   that area's literature adds*, never a renamed copy. The reusable pieces
+   (`tasks/_bundles.py`, `tasks/nas/_bundles.py`) are plain constants: not
+   registered, not evaluable on their own.
 
 ```
 tasks/
 ├── generic/   classification, binary_classification, search, candidate_ranking, multiobjective
-└── nas/       nas_search, nas_architecture, nas_predictor, nas_tradeoff
+└── nas/       nas_search       = search + wall-clock axis, search-space position,
+               │                  random-search baseline, test regret
+               ├── nas_architecture = classification + random-architecture baseline (Yang et al. 2020)
+               └── nas_predictor    = candidate_ranking + top-10% rank correlation (NAS-Bench-Suite-Zero)
 ```
 
 ## What does each task return?
@@ -64,7 +70,10 @@ airas-eval score nas_search --inputs inputs.json --output evaluation.json
 ```
 
 `examples/` holds a minimal input file per NAS task; the test suite scores
-each of them through the CLI.
+each of them through the CLI. NAS-specific inputs (`evaluation_costs`,
+`search_space_scores`, `random_architecture_accuracies`, ...) are optional
+reference data: leave them out and the metrics that need them are reported
+as skipped, with the omission listed.
 
 Inputs are always grouped (`{"main": {...}}`); a task type is the only thing
 the caller chooses, and which task type a study is evaluated as belongs to

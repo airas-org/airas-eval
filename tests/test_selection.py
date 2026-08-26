@@ -51,3 +51,18 @@ def test_selection_regret_at_k():
     assert selection.selection_regret_at_k(misleading, reference, 3) == pytest.approx(
         1.0
     )
+
+
+def test_rank_correlation_top_fraction():
+    # true top-50% = indices with ref >= 6 -> {5,6,7,8,9}; predictor is perfect there
+    ref = list(range(10))
+    pred_good = [9, 8, 7, 6, 5, 5.1, 6.1, 7.1, 8.1, 9.1]  # scrambles the bottom only
+    assert selection.rank_correlation_top_fraction(
+        pred_good, ref, 0.5, method="kendall"
+    ) == pytest.approx(1.0)
+    pred_bad = [0, 1, 2, 3, 4, 9, 8, 7, 6, 5]  # perfect bottom, reversed top
+    assert selection.rank_correlation_top_fraction(
+        pred_bad, ref, 0.5, method="spearman"
+    ) == pytest.approx(-1.0)
+    with pytest.raises(UndefinedMetric):
+        selection.rank_correlation_top_fraction(ref, ref, 0.1, method="kendall")

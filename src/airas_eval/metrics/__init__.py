@@ -1,6 +1,7 @@
 from airas_eval.metrics import (
     classification,
     pareto,
+    population,
     regression,
     search,
     selection,
@@ -9,6 +10,7 @@ from airas_eval.metrics import (
 __all__ = [
     "classification",
     "pareto",
+    "population",
     "regression",
     "search",
     "selection",

@@ -8,21 +8,20 @@ from the installed package.
 
 | Task type | Metrics | Curves | Summary |
 |---|---|---|---|
-| [`nas_search`](#nassearch) | 5 | 1 | 1 |
-| [`nas_architecture`](#nasarchitecture) | 9 | 0 | 2 |
-| [`nas_predictor`](#naspredictor) | 5 | 0 | 1 |
-| [`nas_tradeoff`](#nastradeoff) | 5 | 1 | 2 |
+| [`nas_search`](#nassearch) | 10 | 2 | 3 |
+| [`nas_architecture`](#nasarchitecture) | 11 | 0 | 3 |
+| [`nas_predictor`](#naspredictor) | 7 | 0 | 1 |
 
 ### `nas_search`
 
-Signature: `nas_search/v1@0a0c5c9611b1`
+Signature: `nas_search/v1@680321f9e679`
 
-NAS on a tabular benchmark: search efficiency of one run. Inputs are the benchmark scores of the evaluated architectures in evaluation order plus the benchmark's published optimum. The final architecture's accuracy is a table lookup here, so there are no predictions to score — a study that trains its found architecture evaluates that separately as ``nas_architecture``.
+NAS on a tabular benchmark: search efficiency of one run. Everything ``search`` reports, plus the NAS protocol: the incumbent against estimated wall-clock cost (NAS-Bench-101/201), where the best found architecture sits in the search space, what random search with the same number of evaluations would be expected to reach, improvement over the search-space mean (Yang et al. 2020), and test regret separate from the validation regret used during search. Each NAS-specific block is optional and its omission is reported.
 
 - Required inputs: `evaluated_scores`
-- Optional inputs: `oracle_best`
+- Optional inputs: `oracle_best`, `evaluation_costs`, `search_space_scores`, `final_test_score`, `oracle_test_best`
 
-Conventions: scores are higher-is-better in evaluation order; oracle_best is fixed by the experimental design; regret fails, not skips, if a score exceeds it.
+Conventions: scores are higher-is-better in evaluation order; oracle_best is fixed by the experimental design; regret fails, not skips, if a score exceeds it; costs are the benchmark's per-architecture training cost, cumulated in evaluation order; the random-search baseline is the exact expected best of n uniform draws from search_space_scores; relative improvement is against the search-space mean (Yang et al. 2020).
 
 | Metric | Function | Pinned |
 |---|---|---|
@@ -31,19 +30,27 @@ Conventions: scores are higher-is-better in evaluation order; oracle_best is fix
 | `main.mean_anytime_regret` | `airas_eval.metrics.search.mean_anytime_regret` | — |
 | `main.evaluations_to_best` | `airas_eval.metrics.search.evaluations_to_best` | — |
 | `main.mean_evaluated_score` | `airas_eval.metrics.search.mean_evaluated_score` | — |
+| `main.cost_to_best` | `airas_eval.metrics.search.cost_to_best` | — |
+| `main.search_space_fraction_better` | `airas_eval.tasks.nas._bundles.search_space_fraction_better` | — |
+| `main.gain_over_random_search` | `airas_eval.tasks.nas._bundles.gain_over_random_search` | — |
+| `main.relative_improvement_over_random` | `airas_eval.tasks.nas._bundles.relative_improvement_over_random` | — |
+| `main.test_regret` | `airas_eval.tasks.nas._bundles.test_regret` | — |
 | `main.best_so_far` (curve) | `airas_eval.metrics.search.best_so_far` | — |
+| `main.best_so_far_vs_cost` (curve) | `airas_eval.metrics.search.best_so_far_vs_cost` | — |
 | `main.n_evaluations` (summary) | `airas_eval.tasks._bundles.n_evaluations` | — |
+| `main.total_cost` (summary) | `airas_eval.metrics.search.total_cost` | — |
+| `main.n_search_space` (summary) | `airas_eval.tasks.nas._bundles.n_search_space` | — |
 
 ### `nas_architecture`
 
-Signature: `nas_architecture/v1@f6a02a5e25e6`
+Signature: `nas_architecture/v1@a23d83c6a554`
 
-NAS: target-task performance of a trained final architecture. Predictions of the found architecture on the held-out test set. Single-label multiclass (CIFAR / ImageNet style).
+NAS: target-task performance of a trained final architecture. Everything ``classification`` reports, plus the baseline Yang et al. (ICLR 2020) ask for: accuracy relative to randomly sampled architectures trained with the same pipeline, which factors out the search space and training protocol from the claimed gain.
 
 - Required inputs: `predicted_labels`, `reference_labels`
-- Optional inputs: `probabilities`
+- Optional inputs: `probabilities`, `random_architecture_accuracies`
 
-Conventions: single-label multiclass; precision/recall/F1 are macro-averaged with zero_division=0 (micro equals accuracy here); ECE uses 15 equal-width bins over top-1 confidence.
+Conventions: single-label multiclass; precision/recall/F1 are macro-averaged with zero_division=0 (micro equals accuracy here); ECE uses 15 equal-width bins over top-1 confidence; the random-architecture baseline compares top-1 accuracy against architectures sampled uniformly from the same search space and trained with the same pipeline (Yang et al. 2020).
 
 | Metric | Function | Pinned |
 |---|---|---|
@@ -56,19 +63,22 @@ Conventions: single-label multiclass; precision/recall/F1 are macro-averaged wit
 | `main.log_loss` | `airas_eval.metrics.classification.log_loss` | — |
 | `main.expected_calibration_error` | `airas_eval.metrics.classification.expected_calibration_error` | n_bins=15 |
 | `main.top_5_accuracy` | `airas_eval.tasks._bundles.top_5_accuracy` | — |
+| `main.relative_improvement_over_random` | `airas_eval.tasks.nas._bundles.relative_improvement_over_random_architectures` | — |
+| `main.fraction_of_random_better` | `airas_eval.tasks.nas._bundles.fraction_of_random_architectures_better` | — |
 | `main.n_examples` (summary) | `airas_eval.tasks._bundles.n_examples` | — |
 | `main.n_classes` (summary) | `airas_eval.tasks._bundles.n_classes` | — |
+| `main.n_random_architectures` (summary) | `airas_eval.tasks.nas._bundles.n_random_architectures` | — |
 
 ### `nas_predictor`
 
-Signature: `nas_predictor/v1@877c2237a206`
+Signature: `nas_predictor/v1@611ae9fcd797`
 
-NAS: a performance predictor or zero-cost proxy claim. Proxy scores versus benchmark ground truth over a fixed candidate pool.
+NAS: a performance predictor or zero-cost proxy claim. Everything ``candidate_ranking`` reports, plus Kendall / Spearman restricted to the true top-10 % of the candidate pool — the NAS-Bench-Suite-Zero protocol, because a proxy that ranks the whole space well but scrambles the top is useless for search.
 
 - Required inputs: `predicted_scores`, `reference_scores`
 - Optional inputs: —
 
-Conventions: scores are higher-is-better; Kendall is tau-b; top-k sets use stable descending order for ties; ranks are 1-based.
+Conventions: scores are higher-is-better; Kendall is tau-b; top-k sets use stable descending order for ties; ranks are 1-based; top-10% correlations are computed over the candidates whose TRUE score is in the top 10% (NAS-Bench-Suite-Zero protocol).
 
 | Metric | Function | Pinned |
 |---|---|---|
@@ -77,26 +87,6 @@ Conventions: scores are higher-is-better; Kendall is tau-b; top-k sets use stabl
 | `main.precision_at_top_10pct` | `airas_eval.metrics.selection.precision_at_top_fraction` | fraction=0.1 |
 | `main.selection_regret_at_1` | `airas_eval.metrics.selection.selection_regret_at_k` | k=1 |
 | `main.best_true_rank_in_top_10` | `airas_eval.metrics.selection.best_true_rank_in_predicted_top_k` | k=10 |
+| `main.kendall_tau_top_10pct` | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='kendall' |
+| `main.spearman_rho_top_10pct` | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='spearman' |
 | `main.n_candidates` (summary) | `airas_eval.tasks._bundles.n_candidates` | — |
-
-### `nas_tradeoff`
-
-Signature: `nas_tradeoff/v1@84ab96293947`
-
-NAS: an accuracy-vs-cost trade-off claim. One (error, cost) vector per candidate, both minimized; the hypervolume reference point is fixed in the experimental design.
-
-- Required inputs: `points`
-- Optional inputs: `reference_point`, `reference_front`
-
-Conventions: all objectives are minimized; hypervolume is exact 2-D; IGD/GD/spacing are unnormalized Euclidean (normalize objectives before calling).
-
-| Metric | Function | Pinned |
-|---|---|---|
-| `main.pareto_front_size` | `airas_eval.tasks._bundles.pareto_front_size` | — |
-| `main.hypervolume_2d` | `airas_eval.metrics.pareto.hypervolume_2d` | — |
-| `main.igd` | `airas_eval.metrics.pareto.igd` | — |
-| `main.gd` | `airas_eval.metrics.pareto.gd` | — |
-| `main.spacing` | `airas_eval.metrics.pareto.spacing` | — |
-| `main.pareto_front` (curve) | `airas_eval.metrics.pareto.pareto_front` | — |
-| `main.n_points` (summary) | `airas_eval.tasks._bundles.n_points` | — |
-| `main.n_objectives` (summary) | `airas_eval.tasks._bundles.n_objectives` | — |

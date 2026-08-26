@@ -36,3 +36,20 @@ def test_evaluations_to_best_and_mean_score():
     assert search.evaluations_to_best([1.0, 3.0, 2.0, 3.0]) == 2.0  # first hit
     assert search.evaluations_to_best([5.0]) == 1.0
     assert search.mean_evaluated_score([1.0, 3.0, 2.0]) == pytest.approx(2.0)
+
+
+def test_cost_axis_metrics():
+    scores = [1.0, 3.0, 2.0, 3.0]
+    costs = [10.0, 20.0, 5.0, 5.0]
+    assert search.total_cost(scores, costs) == 40.0
+    assert search.cost_to_best(scores, costs) == 30.0  # first time 3.0 is reached
+    assert search.best_so_far_vs_cost(scores, costs) == [
+        [10.0, 1.0],
+        [30.0, 3.0],
+        [35.0, 3.0],
+        [40.0, 3.0],
+    ]
+    with pytest.raises(ValueError, match="length mismatch"):
+        search.cost_to_best(scores, costs[:2])
+    with pytest.raises(ValueError, match="non-negative"):
+        search.total_cost(scores, [1.0, -1.0, 1.0, 1.0])

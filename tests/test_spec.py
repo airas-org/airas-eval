@@ -75,18 +75,21 @@ def test_registered_tasks_have_distinct_signatures():
     assert len(signatures) == len(set(signatures))
 
 
-def test_nas_tasks_reuse_generic_bundles():
+def test_nas_bundles_extend_the_core_bindings_verbatim():
     pairs = {
         "nas_search": "search",
         "nas_architecture": "classification",
         "nas_predictor": "candidate_ranking",
-        "nas_tradeoff": "multiobjective",
     }
     for nas_task, generic_task in pairs.items():
-        assert (
-            TASKS[nas_task].group("main").bundle
-            is TASKS[generic_task].group("main").bundle
-        )
+        nas = TASKS[nas_task].group("main").bundle
+        core = TASKS[generic_task].group("main").bundle
+        assert nas.metrics[: len(core.metrics)] == core.metrics
+        assert nas.curves[: len(core.curves)] == core.curves
+        assert nas.summary[: len(core.summary)] == core.summary
+        assert len(nas.metrics) > len(core.metrics)
+        # the NAS input model accepts everything the core one does
+        assert set(core.input_model.model_fields) <= set(nas.input_model.model_fields)
 
 
 def test_description_does_not_affect_signature():
