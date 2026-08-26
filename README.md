@@ -1,9 +1,9 @@
 # airas-eval
 
 The trusted evaluation layer for [AIRAS](https://github.com/airas-org/airas):
-agents pass a task type and raw predictions, and get the full standard metric
-suite back. Agents never implement evaluation scripts and never choose which
-metrics (or which variants) get reported.
+agents pass a task type and raw predictions, and get the full fixed set of
+standard metrics back. Agents never implement evaluation scripts and never
+choose which metrics (or which variants) get reported.
 
 ## Structure
 
@@ -63,6 +63,9 @@ report.provenance  # derived task signature, versions, input SHA-256
 airas-eval score nas_search --inputs inputs.json --output evaluation.json
 ```
 
+`examples/` holds a minimal input file per NAS task; the test suite scores
+each of them through the CLI.
+
 Inputs are always grouped (`{"main": {...}}`); a task type is the only thing
 the caller chooses, and which task type a study is evaluated as belongs to
 the research plan, not to the evaluation step.
@@ -94,9 +97,15 @@ the research plan, not to the evaluation step.
 
 ## Install
 
+Not on PyPI yet. Pin a tag so the evaluation layer cannot change under a
+study:
+
 ```bash
-uv add airas-eval   # numpy, scikit-learn, scipy, pydantic
+uvx --from git+https://github.com/airas-org/airas-eval@v0.2.0 airas-eval list
+uv add "airas-eval @ git+https://github.com/airas-org/airas-eval@v0.2.0"
 ```
+
+Dependencies: numpy, scikit-learn, scipy, pydantic.
 
 ## Development
 
@@ -113,10 +122,12 @@ an existing bundle, one line in the area's `TASKS`, then
 `python -m airas_eval.tasks.readme`. A new area = a new sub-package plus one
 line in `tasks.AREAS`. Adding a bundle = an input model in `tasks/_inputs.py`
 and a `Bundle` in `tasks/_bundles.py` with a `summary` count. Keep tasks at
-roughly 5–10 metrics: standard variants only, one pin per parameter. Registration is deliberately explicit (no entry points, no
-scanning): in a trust layer, what gets computed must be visible in a
-reviewed diff. New in-house metrics need parity tests against an oracle
-implementation, or hand-computed cases plus property tests.
+roughly 5–10 metrics: standard variants only, one pin per parameter.
+
+Registration is deliberately explicit (no entry points, no scanning): in a
+trust layer, what gets computed must be visible in a reviewed diff. New
+in-house metrics need parity tests against an oracle implementation, or
+hand-computed cases plus property tests.
 
 ## License
 

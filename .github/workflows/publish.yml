@@ -1,19 +1,21 @@
 name: Publish
 
+# Manual for now (PyPI Trusted Publisher not configured yet). Once it is,
+# switch the trigger to `push: tags: ["v*"]`.
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
       - name: Check tag matches package version
         run: |
           version=$(uv version --short)
-          test "v$version" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != v$version"; exit 1; }
+          git fetch --tags --quiet
+          git tag --points-at HEAD | grep -qx "v$version" || { echo "HEAD is not tagged v$version"; exit 1; }
       - run: uv build
       - uses: actions/upload-artifact@v4
         with:
@@ -31,5 +33,5 @@ jobs:
         with:
           name: dist
           path: dist/
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
       - run: uv publish
