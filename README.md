@@ -1,90 +1,104 @@
 # airas-eval
 
-Standard evaluation-metric implementations for [AIRAS](https://github.com/airas-org/airas):
-a trusted, versioned scoring layer that computes metrics from raw predictions,
-so that agent-generated experiments never score themselves.
+The trusted evaluation layer for [AIRAS](https://github.com/airas-org/airas):
+agents pass a task type and raw predictions, and get the full standard metric
+suite back. Agents never implement evaluation scripts and never choose which
+metrics (or which variants) get reported.
 
-## Why this exists
+## The model
 
-Autonomous research agents can (and do) game evaluations: hand-rolled metric
-implementations, favorable variants chosen silently, and self-reported numbers
-that nothing recomputes. `airas-eval` is the countermeasure:
+```python
+from airas_eval import evaluate
 
-- **Metrics are standard or wrapped, never invented.** Metrics with an
-  unambiguous mathematical definition are implemented here as pure functions
-  `(predictions, references) -> score` and verified in tests against
-  scikit-learn / scipy as parity oracles. Metrics whose community-accepted
-  reference implementation is a specific package (BLEU → `sacrebleu`,
-  DockQ → official `DockQ`, TM-score → `tmtools`) are thin wrappers — a
-  self-implemented DockQ would be exactly the failure mode this library exists
-  to prevent.
-- **Variants are explicit.** Where a metric has ambiguous variants (F1
-  averaging, ECE binning, sMAPE denominators, MACs vs FLOPs), the variant is an
-  explicit argument or is stated in the function's contract, never silently
-  chosen.
-- **Versioned scoring.** Pin this package by commit or release in the trusted
-  scoring workflow; a reported score is then reproducible as
-  `(raw predictions, airas-eval@version) -> metric`.
+report = evaluate(
+    "classification",
+    {
+        "predicted_labels": y_pred,
+        "reference_labels": y_true,
+        "probabilities": probs,   # optional
+    },
+)
+report.metrics     # every standard metric at pinned variants
+report.skipped     # metrics that don't apply, each with a reason
+report.provenance  # suite signature, resolved package versions, input SHA-256
+```
+
+Or as a process boundary, for trusted scoring jobs:
+
+```bash
+airas-eval score classification --inputs inputs.json --output evaluation.json
+airas-eval list   # what suites exist and what inputs they take
+```
+
+Design rules, in order of importance:
+
+1. **No metric choice.** A suite computes *all* standard metrics for the task
+   type. F1 is reported as macro *and* micro *and* weighted. Reporting
+   everything is what removes the cherry-picking degree of freedom.
+2. **No agent-written metric code.** Computation is delegated to the
+   community-canonical implementation for each metric — scikit-learn / scipy
+   for the classic ML metrics, `sacrebleu` for BLEU/chrF, Google's
+   `rouge-score` for ROUGE, official `DockQ` v2, `tmtools` for TM-score,
+   `fvcore` for MACs. airas-eval implements a metric itself only when no
+   canonical pip implementation exists (ECE, SQuAD-style EM/F1, ranking@k,
+   Kabsch RMSD), and pins the variant explicitly.
+3. **Nothing disappears silently.** A metric that cannot be computed on the
+   given inputs (missing probabilities, not binary, missing optional
+   dependency, mathematically undefined) appears under `skipped` with a
+   reason. Unknown task types, unknown input keys, and missing required inputs
+   raise.
+4. **Every report carries provenance.** The suite signature (task type +
+   pinned variants), the resolved versions of the packages that actually
+   computed the numbers, and a SHA-256 of the inputs. Pin airas-eval by commit
+   in the scoring job and a reported score is reproducible as
+   `(inputs, airas-eval@version) -> metrics`.
+
+What this library does *not* claim: it cannot force agents to call it, and it
+does not verify that the predictions themselves are genuine (that they came
+from the claimed model run, or cover the full test split). Those guarantees
+belong to the surrounding infrastructure — a scoring job the agent cannot
+edit, and input-provenance verification — which consume this library.
 
 ## Install
 
 ```bash
-uv add airas-eval                       # core: numpy only
+uv add airas-eval                       # core: numpy, scikit-learn, scipy
 uv add "airas-eval[nlp]"                # + sacrebleu, rouge-score
 uv add "airas-eval[structure]"          # + DockQ, tmtools
 uv add "airas-eval[complexity]"         # + torch, fvcore (params / MACs)
 ```
 
-## Usage
+## Suites
 
-```python
-from airas_eval.metrics import classification, stats
+| Task type | Required inputs | Optional | Metrics |
+|---|---|---|---|
+| `classification` | predicted_labels, reference_labels | probabilities | accuracy, error rate, P/R/F1 (macro+micro+weighted), balanced accuracy, MCC, Cohen's kappa; with probabilities: log loss, ECE, top-5; binary only: AUROC, average precision, Brier |
+| `regression` | predicted_values, reference_values | — | MSE, RMSE, MAE, MAPE (strict), sMAPE, R², explained variance, Pearson, Spearman, Kendall tau-b |
+| `clustering` | predicted_labels, reference_labels | — | ARI, NMI, AMI, V-measure |
+| `retrieval` | ranked_lists, relevant_sets | relevances | P@1/5/10, R@5/10, MRR, MAP, nDCG@10 |
+| `text_qa` | predicted_texts, reference_texts | — | exact match, token F1 (SQuAD normalization) |
+| `text_generation` | predicted_texts, reference_texts | — | BLEU, chrF (sacrebleu), ROUGE-L (rouge-score) |
+| `segmentation` | predicted_mask, reference_mask | — | pixel accuracy, mIoU, Dice |
+| `structure_comparison` | predicted_coords, reference_coords | reference_sequence | RMSD (Kabsch), RMSD w/o superposition, TM-score (tmtools) |
 
-acc = classification.accuracy(predicted_labels, reference_labels)
-f1 = classification.f1(predicted_labels, reference_labels, average="macro")
-ci = stats.bootstrap_ci(classification.accuracy, predicted_labels, reference_labels)
-```
-
-Inspect what is registered:
-
-```bash
-airas-eval list                # all task types
-airas-eval list classification
-```
-
-## Coverage
-
-| Task type | Metrics | Origin |
-|---|---|---|
-| classification | accuracy, error rate, top-k, precision/recall/F1 (micro/macro/weighted), balanced accuracy, MCC, Cohen's kappa, AUROC, average precision, log loss, Brier, ECE | core |
-| regression | MSE, RMSE, MAE, MAPE, sMAPE, R², explained variance, Pearson, Spearman, Kendall tau-b | core |
-| ranking | precision@k, recall@k, hit rate@k, MRR, MAP, nDCG@k | core |
-| clustering | ARI, NMI, AMI, V-measure | core |
-| vision | pixel accuracy, IoU, Dice, mIoU, PSNR | core |
-| nlp | exact match, token F1 (SQuAD-style) | core |
-| nlp | BLEU, chrF (sacrebleu), ROUGE-L (rouge-score) | wrapped |
-| structure | RMSD with Kabsch superposition | core |
-| structure | TM-score (tmtools), DockQ (official DockQ v2) | wrapped |
-| complexity | parameter count (torch), MACs with explicit counter metadata (fvcore) | wrapped |
-| stats | mean±std over seeds, bootstrap CI for any metric, paired permutation test | core |
-
-Every core metric is tested for parity against scikit-learn / scipy where an
-oracle exists, including tie handling.
+The underlying metric functions (`airas_eval.metrics.*`) remain importable for
+trusted-side use, along with statistical helpers (`stats.mean_std`,
+`stats.bootstrap_ci`, `stats.paired_permutation_test`) and model-complexity
+utilities (`complexity.parameter_count`, `complexity.macs`).
 
 ## Roadmap
 
 - lDDT / lDDT-PLI as an [OpenStructure](https://openstructure.org/) wrapper
   (reference implementation; conda/container only, hence not yet an extra).
-- COCO mAP as a `pycocotools` wrapper (protocol details make reimplementation
-  a known source of errors).
+- COCO mAP as a `pycocotools` wrapper; DockQ suite for structure files.
 - SSIM (window/data-range conventions), CRPS (`properscoring`), MASE.
-- Score provenance signatures (sacrebleu-style config strings) on every result.
-- Model-dependent scores (FID via `clean-fid`, LPIPS, BERTScore) as clearly
-  separated optional wrappers — never mixed into the pure core.
+- NAS suite: architecture-level scoring (params/MACs from a spec) and
+  benchmark-oracle protocols.
 
 Out of scope by design: pLDDT and other self-reported model confidences (they
-compare against no reference and are not evaluation metrics), latency and
-memory benchmarking (hardware-dependent; belongs in a benchmarking harness).
+compare against no reference), latency/memory benchmarking (hardware-dependent),
+and verifying the authenticity of prediction inputs (an infrastructure concern,
+not a metric concern).
 
 ## Development
 
@@ -94,6 +108,10 @@ uv run ruff check .
 uv run mypy src
 uv run pytest
 ```
+
+Core metric outputs are tested for parity against scikit-learn / scipy,
+including tie handling; the suite layer is tested for its contract (fail-closed
+inputs, explicit skips, provenance determinism).
 
 ## License
 
