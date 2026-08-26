@@ -4,17 +4,17 @@
 
 Every task returns *all* the metrics listed for it; nothing here is
 optional at call time. `airas-eval list <task_type>` prints the same
-from the installed package. *Scalar* and *curve* entries are both
-metrics (they differ only in shape); *summary* entries are input sizes,
-not metrics.
+from the installed package. Scalar and curve entries are both metrics;
+they differ only in shape. Input sizes (`n_*`, `total_*`) are reported
+under `inputs_summary` and listed under each table, not in it.
 
-| Task type | Scalar metrics | Curve metrics | Summary |
-|---|---|---|---|
-| [`classification`](#classification) | 9 | 0 | 2 |
-| [`binary_classification`](#binaryclassification) | 11 | 0 | 1 |
-| [`search`](#search) | 5 | 1 | 1 |
-| [`candidate_ranking`](#candidateranking) | 5 | 0 | 1 |
-| [`multiobjective`](#multiobjective) | 5 | 1 | 2 |
+| Task type | Metrics | of which curves |
+|---|---|---|
+| [`classification`](#classification) | 9 | 0 |
+| [`binary_classification`](#binaryclassification) | 11 | 0 |
+| [`search`](#search) | 6 | 1 |
+| [`candidate_ranking`](#candidateranking) | 5 | 0 |
+| [`multiobjective`](#multiobjective) | 6 | 1 |
 
 ### `classification`
 
@@ -36,8 +36,8 @@ Conventions: single-label multiclass; precision/recall/F1 are macro-averaged wit
 | `main.log_loss` | `airas_eval.metrics.classification.log_loss` | — |
 | `main.expected_calibration_error` | `airas_eval.metrics.classification.expected_calibration_error` | n_bins=15 |
 | `main.top_5_accuracy` | `airas_eval.tasks._bundles.top_5_accuracy` | — |
-| `main.n_examples` (summary) | `airas_eval.tasks._bundles.n_examples` | — |
-| `main.n_classes` (summary) | `airas_eval.tasks._bundles.n_classes` | — |
+
+Reported input sizes (not metrics): `main.n_examples`, `main.n_classes`
 
 ### `binary_classification`
 
@@ -63,7 +63,8 @@ Conventions: labels in {0, 1}; score metrics read the positive class from probab
 | `main.log_loss` | `airas_eval.metrics.classification.log_loss` | — |
 | `main.brier_score` | `airas_eval.tasks._bundles.brier_score_binary` | — |
 | `main.expected_calibration_error` | `airas_eval.metrics.classification.expected_calibration_error` | n_bins=15 |
-| `main.n_examples` (summary) | `airas_eval.tasks._bundles.n_examples` | — |
+
+Reported input sizes (not metrics): `main.n_examples`
 
 ### `search`
 
@@ -82,7 +83,8 @@ Conventions: scores are higher-is-better in evaluation order; oracle_best is fix
 | `main.evaluations_to_best` | `airas_eval.metrics.search.evaluations_to_best` | — |
 | `main.mean_evaluated_score` | `airas_eval.metrics.search.mean_evaluated_score` | — |
 | `main.best_so_far` (curve) | `airas_eval.metrics.search.best_so_far` | — |
-| `main.n_evaluations` (summary) | `airas_eval.tasks._bundles.n_evaluations` | — |
+
+Reported input sizes (not metrics): `main.n_evaluations`
 
 ### `candidate_ranking`
 
@@ -100,7 +102,8 @@ Conventions: scores are higher-is-better; Kendall is tau-b; top-k sets use stabl
 | `main.precision_at_top_10pct` | `airas_eval.metrics.selection.precision_at_top_fraction` | fraction=0.1 |
 | `main.selection_regret_at_1` | `airas_eval.metrics.selection.selection_regret_at_k` | k=1 |
 | `main.best_true_rank_in_top_10` | `airas_eval.metrics.selection.best_true_rank_in_predicted_top_k` | k=10 |
-| `main.n_candidates` (summary) | `airas_eval.tasks._bundles.n_candidates` | — |
+
+Reported input sizes (not metrics): `main.n_candidates`
 
 ### `multiobjective`
 
@@ -119,5 +122,5 @@ Conventions: all objectives are minimized; hypervolume is exact 2-D; IGD/GD/spac
 | `main.gd` | `airas_eval.metrics.pareto.gd` | — |
 | `main.spacing` | `airas_eval.metrics.pareto.spacing` | — |
 | `main.pareto_front` (curve) | `airas_eval.metrics.pareto.pareto_front` | — |
-| `main.n_points` (summary) | `airas_eval.tasks._bundles.n_points` | — |
-| `main.n_objectives` (summary) | `airas_eval.tasks._bundles.n_objectives` | — |
+
+Reported input sizes (not metrics): `main.n_points`, `main.n_objectives`

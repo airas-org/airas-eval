@@ -30,11 +30,7 @@ def render_task(task: TaskSpec) -> str:
         if bundle.notes:
             lines += [f"Conventions: {bundle.notes}.", ""]
         lines += ["| Metric | Function | Pinned |", "|---|---|---|"]
-        for kind, bindings in (
-            ("", bundle.metrics),
-            (" (curve)", bundle.curves),
-            (" (summary)", bundle.summary),
-        ):
+        for kind, bindings in (("", bundle.metrics), (" (curve)", bundle.curves)):
             for b in bindings:
                 pinned = ", ".join(f"{k}={v!r}" for k, v in sorted(b.kwargs.items()))
                 lines.append(
@@ -42,6 +38,9 @@ def render_task(task: TaskSpec) -> str:
                     f"{b.fn.__qualname__}` | {pinned or '—'} |"
                 )
         lines.append("")
+        if bundle.summary:
+            sizes = ", ".join(f"`{group.name}.{b.name}`" for b in bundle.summary)
+            lines += [f"Reported input sizes (not metrics): {sizes}", ""]
     return "\n".join(lines)
 
 
@@ -53,19 +52,18 @@ def render_area(area: str, tasks: tuple[TaskSpec, ...]) -> str:
         "",
         "Every task returns *all* the metrics listed for it; nothing here is",
         "optional at call time. `airas-eval list <task_type>` prints the same",
-        "from the installed package. *Scalar* and *curve* entries are both",
-        "metrics (they differ only in shape); *summary* entries are input sizes,",
-        "not metrics.",
+        "from the installed package. Scalar and curve entries are both metrics;",
+        "they differ only in shape. Input sizes (`n_*`, `total_*`) are reported",
+        "under `inputs_summary` and listed under each table, not in it.",
         "",
-        "| Task type | Scalar metrics | Curve metrics | Summary |",
-        "|---|---|---|---|",
+        "| Task type | Metrics | of which curves |",
+        "|---|---|---|",
     ]
     for t in tasks:
-        m = sum(len(g.bundle.metrics) for g in t.groups)
+        m = sum(len(g.bundle.metrics) + len(g.bundle.curves) for g in t.groups)
         c = sum(len(g.bundle.curves) for g in t.groups)
-        s = sum(len(g.bundle.summary) for g in t.groups)
         head.append(
-            f"| [`{t.task_type}`](#{t.task_type.replace('_', '')}) | {m} | {c} | {s} |"
+            f"| [`{t.task_type}`](#{t.task_type.replace('_', '')}) | {m} | {c} |"
         )
     head.append("")
     return "\n".join(head) + "\n" + "\n".join(render_task(t) for t in tasks)

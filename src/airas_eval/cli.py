@@ -53,8 +53,9 @@ def main() -> None:
                     print(f"      {group.name}.{binding.name}")
                 for binding in bundle.curves:
                     print(f"      {group.name}.{binding.name}  [curve]")
-                for binding in bundle.summary:
-                    print(f"      {group.name}.{binding.name}  [summary]")
+                if bundle.summary:
+                    sizes = ", ".join(f"{group.name}.{b.name}" for b in bundle.summary)
+                    print(f"    input sizes (not metrics): {sizes}")
         return
 
     with open(args.inputs) as f:

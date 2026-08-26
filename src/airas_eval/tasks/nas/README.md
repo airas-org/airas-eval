@@ -4,15 +4,15 @@
 
 Every task returns *all* the metrics listed for it; nothing here is
 optional at call time. `airas-eval list <task_type>` prints the same
-from the installed package. *Scalar* and *curve* entries are both
-metrics (they differ only in shape); *summary* entries are input sizes,
-not metrics.
+from the installed package. Scalar and curve entries are both metrics;
+they differ only in shape. Input sizes (`n_*`, `total_*`) are reported
+under `inputs_summary` and listed under each table, not in it.
 
-| Task type | Scalar metrics | Curve metrics | Summary |
-|---|---|---|---|
-| [`nas_search`](#nassearch) | 10 | 2 | 3 |
-| [`nas_architecture`](#nasarchitecture) | 11 | 0 | 3 |
-| [`nas_predictor`](#naspredictor) | 7 | 0 | 1 |
+| Task type | Metrics | of which curves |
+|---|---|---|
+| [`nas_search`](#nassearch) | 12 | 2 |
+| [`nas_architecture`](#nasarchitecture) | 11 | 0 |
+| [`nas_predictor`](#naspredictor) | 7 | 0 |
 
 ### `nas_search`
 
@@ -39,9 +39,8 @@ Conventions: scores are higher-is-better in evaluation order; oracle_best is fix
 | `main.test_regret` | `airas_eval.tasks.nas._bundles.test_regret` | — |
 | `main.best_so_far` (curve) | `airas_eval.metrics.search.best_so_far` | — |
 | `main.best_so_far_vs_cost` (curve) | `airas_eval.metrics.search.best_so_far_vs_cost` | — |
-| `main.n_evaluations` (summary) | `airas_eval.tasks._bundles.n_evaluations` | — |
-| `main.total_cost` (summary) | `airas_eval.metrics.search.total_cost` | — |
-| `main.n_search_space` (summary) | `airas_eval.tasks.nas._bundles.n_search_space` | — |
+
+Reported input sizes (not metrics): `main.n_evaluations`, `main.total_cost`, `main.n_search_space`
 
 ### `nas_architecture`
 
@@ -67,9 +66,8 @@ Conventions: single-label multiclass; precision/recall/F1 are macro-averaged wit
 | `main.top_5_accuracy` | `airas_eval.tasks._bundles.top_5_accuracy` | — |
 | `main.relative_improvement_over_random` | `airas_eval.tasks.nas._bundles.relative_improvement_over_random_architectures` | — |
 | `main.fraction_of_random_better` | `airas_eval.tasks.nas._bundles.fraction_of_random_architectures_better` | — |
-| `main.n_examples` (summary) | `airas_eval.tasks._bundles.n_examples` | — |
-| `main.n_classes` (summary) | `airas_eval.tasks._bundles.n_classes` | — |
-| `main.n_random_architectures` (summary) | `airas_eval.tasks.nas._bundles.n_random_architectures` | — |
+
+Reported input sizes (not metrics): `main.n_examples`, `main.n_classes`, `main.n_random_architectures`
 
 ### `nas_predictor`
 
@@ -91,4 +89,5 @@ Conventions: scores are higher-is-better; Kendall is tau-b; top-k sets use stabl
 | `main.best_true_rank_in_top_10` | `airas_eval.metrics.selection.best_true_rank_in_predicted_top_k` | k=10 |
 | `main.kendall_tau_top_10pct` | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='kendall' |
 | `main.spearman_rho_top_10pct` | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='spearman' |
-| `main.n_candidates` (summary) | `airas_eval.tasks._bundles.n_candidates` | — |
+
+Reported input sizes (not metrics): `main.n_candidates`
