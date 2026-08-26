@@ -1,0 +1,69 @@
+[project]
+name = "airas-eval"
+version = "0.1.0"
+description = "Standard evaluation-metric implementations for AIRAS: a trusted, versioned scoring layer computed from raw predictions"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Wrappers around community-accepted reference implementations. These are the
+# canonical scorers for their domains; airas-eval deliberately does not
+# reimplement them.
+nlp = ["sacrebleu>=2.4", "rouge-score>=0.1.2"]
+structure = ["DockQ>=2.1", "tmtools>=0.2"]
+complexity = ["torch>=2.2", "fvcore>=0.1.5"]
+
+[project.scripts]
+airas-eval = "airas_eval.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.11.8",
+    "mypy>=1.15.0",
+    # Parity oracles for tests: metric outputs are verified against these.
+    "scikit-learn>=1.5",
+    "scipy>=1.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/airas_eval"]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+# numpy's generic ndarray parameters add noise without catching real bugs here
+disallow_any_generics = false
+warn_return_any = false
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = [
+    "sacrebleu.*",
+    "rouge_score.*",
+    "DockQ.*",
+    "tmtools.*",
+    "sklearn.*",
+    "scipy.*",
+    "fvcore.*",
+    "torch.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
