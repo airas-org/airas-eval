@@ -15,9 +15,9 @@ Two layers, and nothing a caller can choose between them:
    top-k selection, 2-D hypervolume, IGD/GD/spacing), pinned and
    property-tested.
 2. **`tasks/`** — one sub-package per area, one module per task type. A task
-   type is the full set of metrics a study of that kind must report (5–11
-   of them, each with its variant pinned), computed from one validated input
-   group. `generic/` holds the core evaluation families; an area package
+   type is the full set of metrics a study of that kind must report (5–12
+   of them, scalar or curve, each with its variant pinned), computed from
+   one validated input group. `generic/` holds the core evaluation families; an area package
    (`nas/`) builds on them — its bundles are *the core bindings plus what
    that area's literature adds*, never a renamed copy. The reusable pieces
    (`tasks/_bundles.py`, `tasks/nas/_bundles.py`) are plain constants: not
@@ -57,9 +57,9 @@ report = evaluate(
     "nas_search",
     {"main": {"evaluated_scores": scores_in_order, "oracle_best": 94.37}},
 )
-report.metrics  # {"main.best_score": ..., "main.final_regret": ..., ...}
-report.curves  # {"main.best_so_far": [...]}
-report.inputs_summary  # {"main.n_evaluations": 200}  — sizes, kept apart from metrics
+report.metrics  # scalar metrics: {"main.best_score": ..., "main.final_regret": ..., ...}
+report.curves  # non-scalar metrics: {"main.best_so_far": [...]}
+report.inputs_summary  # NOT metrics — input sizes: {"main.n_evaluations": 200}
 report.skipped  # what didn't apply — machine-readable code + reason
 report.omitted_optional_inputs  # e.g. ["main.oracle_best"]
 report.provenance  # derived task signature, versions, input SHA-256

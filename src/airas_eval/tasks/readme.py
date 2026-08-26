@@ -53,9 +53,11 @@ def render_area(area: str, tasks: tuple[TaskSpec, ...]) -> str:
         "",
         "Every task returns *all* the metrics listed for it; nothing here is",
         "optional at call time. `airas-eval list <task_type>` prints the same",
-        "from the installed package.",
+        "from the installed package. *Scalar* and *curve* entries are both",
+        "metrics (they differ only in shape); *summary* entries are input sizes,",
+        "not metrics.",
         "",
-        "| Task type | Metrics | Curves | Summary |",
+        "| Task type | Scalar metrics | Curve metrics | Summary |",
         "|---|---|---|---|",
     ]
     for t in tasks:

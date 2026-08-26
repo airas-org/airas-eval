@@ -310,10 +310,11 @@ def test_every_task_reports_input_sizes_outside_metrics():
             )
 
 
-def test_every_task_is_between_five_and_eleven_metrics():
+def test_every_task_is_between_five_and_twelve_metrics():
+    # curves are metrics too (non-scalar); summary entries are not
     for task_type, task in TASKS.items():
-        n = sum(len(g.bundle.metrics) for g in task.groups)
-        assert 5 <= n <= 11, (task_type, n)
+        n = sum(len(g.bundle.metrics) + len(g.bundle.curves) for g in task.groups)
+        assert 5 <= n <= 12, (task_type, n)
 
 
 def test_version_comes_from_installed_metadata():
