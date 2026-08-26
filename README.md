@@ -15,11 +15,11 @@ report = evaluate(
     {
         "predicted_labels": y_pred,
         "reference_labels": y_true,
-        "probabilities": probs,   # optional
+        "probabilities": probs,  # optional
     },
 )
-report.metrics     # every standard metric at pinned variants
-report.skipped     # metrics that don't apply, each with a reason
+report.metrics  # every standard metric at pinned variants
+report.skipped  # metrics that don't apply, each with a reason
 report.provenance  # suite signature, resolved package versions, input SHA-256
 ```
 
