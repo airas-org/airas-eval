@@ -6,6 +6,15 @@ import pytest
 from airas_eval import aggregate_reports, compare, evaluate, validate_inputs
 from airas_eval.tasks import TASKS
 
+
+def _skipped_names(report) -> set[str]:
+    return {
+        name
+        for code, entries in report.skipped.items()
+        for name in (entries if isinstance(entries, list) else entries.keys())
+    }
+
+
 rng = np.random.default_rng(5)
 N = 200
 Y_TRUE_MC = rng.integers(0, 6, size=N).tolist()
@@ -54,15 +63,15 @@ def test_multiclass_full_inputs():
         "n_examples": N,
         "n_classes": 6,
     }
-    assert report.skipped == {}
+    assert not any(report.skipped.values())
     assert report.omitted_optional_inputs == []
 
 
 def test_missing_optional_input_is_coded_and_surfaced():
     report = evaluate("classification", CLS_NO_PROBS)
     assert "accuracy" in report.metrics
-    assert report.skipped["log_loss"]["code"] == "missing_optional_input"
-    assert report.skipped["n_classes"]["code"] == "missing_optional_input"
+    assert "log_loss" in report.skipped["missing_optional_input"]
+    assert "n_classes" in report.skipped["missing_optional_input"]
     assert report.omitted_optional_inputs == ["probabilities"]
 
 
@@ -72,7 +81,7 @@ def test_binary_classification_task():
     assert 0.5 < report.metrics["auroc"] <= 1.0
     for name in ("precision", "recall", "f1", "brier_score", "average_precision"):
         assert f"{name}" in report.metrics
-    assert report.skipped == {}
+    assert not any(report.skipped.values())
     # a binary task fed one-class references: data problem, not a shape problem
     one_class = evaluate(
         "binary_classification",
@@ -82,12 +91,12 @@ def test_binary_classification_task():
             "probabilities": [[0.9, 0.1], [0.4, 0.6], [0.8, 0.2]],
         },
     )
-    assert one_class.skipped["auroc"]["code"] == "undefined_on_data"
+    assert "auroc" in one_class.skipped["undefined_on_data"]
 
 
 def test_multiclass_task_marks_top5_not_applicable_for_few_classes():
     report = evaluate("classification", BIN_FULL)
-    assert report.skipped["top_5_accuracy"]["code"] == "not_applicable"
+    assert "top_5_accuracy" in report.skipped["not_applicable"]
 
 
 def test_contract_is_fail_closed():
@@ -142,7 +151,7 @@ def test_search_task():
     assert report.curves["best_so_far"] == [88.0, 91.2, 91.2, 93.1]
     assert report.inputs_summary == {"n_evaluations": 4}
     without_oracle = evaluate("search", {"evaluated_scores": [88.0, 91.2]})
-    assert without_oracle.skipped["final_regret"]["code"] == "missing_optional_input"
+    assert "final_regret" in without_oracle.skipped["missing_optional_input"]
     assert without_oracle.omitted_optional_inputs == ["oracle_best"]
     with pytest.raises(ValueError, match="exceeds the benchmark optimum"):
         evaluate("search", {"evaluated_scores": [95.0], "oracle_best": 94.37})
@@ -163,8 +172,8 @@ def test_candidate_ranking_task():
     assert "best_true_rank_in_top_10" in report.metrics
     assert report.inputs_summary == {"n_candidates": 40}
     small = evaluate("candidate_ranking", RANK_SMALL)
-    assert small.skipped["best_true_rank_in_top_10"]["code"] == "undefined_on_data"
-    assert small.skipped["precision_at_top_10pct"]["code"] == "undefined_on_data"
+    assert "best_true_rank_in_top_10" in small.skipped["undefined_on_data"]
+    assert "precision_at_top_10pct" in small.skipped["undefined_on_data"]
 
 
 def test_multiobjective_task():
@@ -178,7 +187,7 @@ def test_multiobjective_task():
         "n_objectives": 2,
     }
     for name in ("igd", "gd"):
-        assert report.skipped[f"{name}"]["code"] == "missing_optional_input"
+        assert f"{name}" in report.skipped["missing_optional_input"]
     assert report.omitted_optional_inputs == ["reference_front"]
 
 
@@ -190,7 +199,7 @@ def test_undefined_metric_is_skipped_with_code():
             "reference_scores": [1.0, 2.0, 3.0],
         },
     )
-    assert report.skipped["kendall_tau"]["code"] == "undefined_on_data"
+    assert "kendall_tau" in report.skipped["undefined_on_data"]
 
 
 NAS_SEARCH_FULL = {
@@ -213,8 +222,8 @@ def test_nas_tasks_are_supersets_of_generic_tasks():
         assert all(a.metrics[k] == v for k, v in b.metrics.items())
         # ... and the NAS extras exist in the report as coded skips, since the
         # generic inputs carry none of the NAS reference data
-        declared_a = set(a.metrics) | set(a.skipped)
-        declared_b = set(b.metrics) | set(b.skipped)
+        declared_a = set(a.metrics) | _skipped_names(a)
+        declared_b = set(b.metrics) | _skipped_names(b)
         assert declared_a > declared_b, nas_task
         assert a.provenance["task_signature"].startswith(f"{nas_task}/v1@")
 
@@ -226,7 +235,7 @@ def test_nas_pre_training_requires_search_or_predictor():
         evaluate("nas_pre_training", {"predicted_scores": [1.0, 2.0]})
     report = evaluate("nas_pre_training", RANK_SMALL)
     assert "evaluated_scores" in report.omitted_optional_inputs
-    assert report.skipped["best_score"]["code"] == "missing_optional_input"
+    assert "best_score" in report.skipped["missing_optional_input"]
 
 
 def test_nas_pre_training_search_specific_metrics():
@@ -297,7 +306,7 @@ def test_nas_post_training_tradeoff_metrics():
     )
     assert report.metrics["hypervolume_2d"] == pytest.approx(6.9)
     assert report.curves["pareto_front"] == [[0.1, 5.0], [0.2, 2.0]]
-    assert report.skipped["igd"]["code"] == "missing_optional_input"
+    assert "igd" in report.skipped["missing_optional_input"]
     with pytest.raises(ValueError, match="invalid inputs"):
         evaluate("nas_post_training", {"points": [[0.1, 1.0]]})  # labels missing
 

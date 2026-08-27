@@ -112,7 +112,7 @@ def _print_details(task_types: list[str]) -> None:
         for key, header in _KIND_HEADERS:
             if not info[key]:
                 continue
-            print(f"  {header}:")
+            print(f"  {header}(<- 必要な入力):")
             ranges = [
                 f"{r['value_range']} {arrows[r['direction']]}"
                 if r["value_range"]
@@ -120,7 +120,9 @@ def _print_details(task_types: list[str]) -> None:
                 for r in info[key]
             ]
             rwidth = max(_width(x) for x in ranges)
-            for r, rng in zip(info[key], ranges, strict=True):
+            needs = [" + ".join(r["inputs"]) for r in info[key]]
+            nwidth = max(len(x) for x in needs)
+            for r, rng, need in zip(info[key], ranges, needs, strict=True):
                 tag = "  (曲線)" if r["kind"] == "curve" else ""
                 pinned = (
                     "  [" + ", ".join(f"{k}={v}" for k, v in r["pinned"].items()) + "]"
@@ -129,7 +131,7 @@ def _print_details(task_types: list[str]) -> None:
                 )
                 range_col = f"  {_pad(rng, rwidth)}" if rwidth else ""
                 print(
-                    f"    {r['name']:<{width}}{range_col}  "
+                    f"    {r['name']:<{width}}  <- {need:<{nwidth}}{range_col}  "
                     f"{_short(r['description'])}{pinned}{tag}"
                 )
         print()

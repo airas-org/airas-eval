@@ -3,7 +3,9 @@
 ``evaluate(task_type, inputs)`` computes the full fixed metric set for a task
 type from ONE inputs dict — there is no parameter for choosing metrics,
 variants, or a subset of the task. What cannot be computed is reported under
-``skipped`` with a machine-readable code, never silently dropped; and ONLY
+``skipped``, grouped by machine-readable code, never silently dropped
+(metrics that only lack an optional input are listed by name — the cause is
+already in ``omitted_optional_inputs``; other skips carry a reason); and ONLY
 the dedicated skip exceptions are converted to skips — a plain ValueError
 (malformed inputs, a bug in a metric) fails the evaluation.
 
@@ -34,7 +36,7 @@ class EvaluationReport:
     task_type: str
     metrics: dict[str, float]
     curves: dict[str, list[Any]]
-    skipped: dict[str, dict[str, str]]
+    skipped: dict[str, Any]
     inputs_summary: dict[str, float]
     omitted_optional_inputs: list[str]
     provenance: dict[str, Any]
@@ -132,69 +134,90 @@ def validate_inputs(task_type: str, inputs: dict[str, Any]) -> list[str]:
 
 def _run_binding(
     binding: MetricBinding, data: dict[str, Any]
-) -> tuple[Any, dict[str, str] | None]:
+) -> tuple[Any, tuple[SkipCode, str] | None]:
     absent = [key for key in binding.inputs if data.get(key) is None]
     if absent:
-        return None, {
-            "code": SkipCode.MISSING_OPTIONAL_INPUT.value,
-            "reason": f"requires input(s): {', '.join(absent)}",
-        }
+        return None, (SkipCode.MISSING_OPTIONAL_INPUT, ", ".join(absent))
     try:
         value = binding.fn(*(data[key] for key in binding.inputs), **binding.kwargs)
     except NotApplicable as err:
-        return None, {"code": SkipCode.NOT_APPLICABLE.value, "reason": str(err)}
+        return None, (SkipCode.NOT_APPLICABLE, str(err))
     except UndefinedMetric as err:
-        return None, {"code": SkipCode.UNDEFINED_ON_DATA.value, "reason": str(err)}
+        return None, (SkipCode.UNDEFINED_ON_DATA, str(err))
     except ImportError as err:
-        return None, {
-            "code": SkipCode.MISSING_DEPENDENCY.value,
-            "reason": f"requires an optional dependency: {err}",
-        }
+        return None, (
+            SkipCode.MISSING_DEPENDENCY,
+            f"requires an optional dependency: {err}",
+        )
     return value, None
+
+
+def _empty_skipped() -> dict[str, Any]:
+    return {
+        SkipCode.MISSING_OPTIONAL_INPUT.value: [],
+        SkipCode.NOT_APPLICABLE.value: {},
+        SkipCode.UNDEFINED_ON_DATA.value: {},
+        SkipCode.MISSING_DEPENDENCY.value: {},
+    }
+
+
+def _record_skip(
+    skipped: dict[str, Any], name: str, code: SkipCode, reason: str
+) -> None:
+    if code is SkipCode.MISSING_OPTIONAL_INPUT:
+        skipped[code.value].append(name)
+    else:
+        skipped[code.value][name] = reason
 
 
 def evaluate(task_type: str, inputs: dict[str, Any]) -> EvaluationReport:
     """Compute the full fixed metric set for ``task_type`` on ``inputs``.
 
     Fail-closed on the contract: unknown task types, unknown input keys,
-    wrong types, and missing required inputs raise. Metrics that do not
-    apply to the given data are reported under ``skipped`` with a
-    machine-readable code and a reason; omitted optional inputs are listed.
+    wrong types, and missing required inputs raise. Metrics that could not be
+    computed are reported under ``skipped`` grouped by code: names only for
+    ``missing_optional_input`` (see ``omitted_optional_inputs`` and
+    ``airas-eval list <task>`` for which input each metric needs), name ->
+    reason for the other codes.
     """
     task = _get_task(task_type)
     data = _validated(task, inputs)
 
     metrics: dict[str, float] = {}
     curves: dict[str, list[Any]] = {}
-    skipped: dict[str, dict[str, str]] = {}
+    skipped = _empty_skipped()
     inputs_summary: dict[str, float] = {}
 
     for target, bindings in ((metrics, task.metrics), (inputs_summary, task.summary)):
         for binding in bindings:
             value, skip = _run_binding(binding, data)
             if skip is not None:
-                skipped[binding.name] = skip
+                _record_skip(skipped, binding.name, *skip)
                 continue
             score = float(value)
             if not np.isfinite(score):
-                skipped[binding.name] = {
-                    "code": SkipCode.UNDEFINED_ON_DATA.value,
-                    "reason": f"non-finite result ({score})",
-                }
+                _record_skip(
+                    skipped,
+                    binding.name,
+                    SkipCode.UNDEFINED_ON_DATA,
+                    f"non-finite result ({score})",
+                )
                 continue
             target[binding.name] = score
 
     for binding in task.curves:
         value, skip = _run_binding(binding, data)
         if skip is not None:
-            skipped[binding.name] = skip
+            _record_skip(skipped, binding.name, *skip)
             continue
         curve = np.asarray(value, dtype=float)
         if not np.all(np.isfinite(curve)):
-            skipped[binding.name] = {
-                "code": SkipCode.UNDEFINED_ON_DATA.value,
-                "reason": "non-finite values in curve",
-            }
+            _record_skip(
+                skipped,
+                binding.name,
+                SkipCode.UNDEFINED_ON_DATA,
+                "non-finite values in curve",
+            )
             continue
         curves[binding.name] = curve.tolist()
 

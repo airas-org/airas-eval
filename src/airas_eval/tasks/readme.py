@@ -25,22 +25,26 @@ def render_task(task: TaskSpec) -> str:
         lines.append(f"| `{i['name']}{marker}: {i['type']}` | {i['description']} |")
     lines.append("")
     lines += [
-        "| 指標 | 値域 | 良い方向 | 説明 | 実装 | 固定パラメータ |",
-        "|---|---|---|---|---|---|",
+        "| 指標 | 必要な入力 | 値域 | 良い方向 | 説明 | 実装 | 固定パラメータ |",
+        "|---|---|---|---|---|---|---|",
     ]
     arrows = {"higher": "高いほど良い", "lower": "低いほど良い", "none": "—"}
     for kind, bindings in (("", task.metrics), ("(曲線)", task.curves)):
         for b in bindings:
             pinned = ", ".join(f"{k}={v!r}" for k, v in sorted(b.kwargs.items()))
+            needs = ", ".join(f"`{i}`" for i in b.inputs)
             lines.append(
-                f"| `{b.name}`{kind} | {b.value_range} | {arrows[b.direction]} | "
-                f"{b.description} | `{b.fn.__module__}.{b.fn.__qualname__}` | "
-                f"{pinned or '—'} |"
+                f"| `{b.name}`{kind} | {needs} | {b.value_range} | "
+                f"{arrows[b.direction]} | {b.description} | "
+                f"`{b.fn.__module__}.{b.fn.__qualname__}` | {pinned or '—'} |"
             )
     lines.append("")
     if task.summary:
         lines += ["入力サイズ(指標ではない):", ""]
-        lines += [f"- `{b.name}` — {b.description}" for b in task.summary]
+        lines += [
+            f"- `{b.name}` <- {', '.join(f'`{i}`' for i in b.inputs)} — {b.description}"
+            for b in task.summary
+        ]
         lines.append("")
     if task.per_example:
         lines += ["事例ごとのスコア(`compare` 用、指標ではない):", ""]

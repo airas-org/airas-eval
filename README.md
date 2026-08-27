@@ -82,7 +82,7 @@ report = evaluate(
 report.metrics  # スカラー指標: {"accuracy": ..., "test_regret": ..., "hypervolume_2d": ...}
 report.curves  # 曲線指標: {"pareto_front": [...]}
 report.inputs_summary  # 指標ではない — 入力サイズ: {"n_examples": 10000, ...}
-report.skipped  # 計算できなかった指標 — 機械可読なコード + 理由
+report.skipped  # 計算できなかった指標(理由コード別): missing_optional_input は名前の一覧、他は名前 → 理由
 report.omitted_optional_inputs  # 例: ["random_architecture_accuracies", "reference_front"]
 report.provenance  # 導出されたタスク署名、依存パッケージの版、入力の SHA-256
 ```
@@ -120,9 +120,11 @@ airas-eval compare nas_post_training --a inputs_A.json --b inputs_B.json
    明示的に固定される(テストで強制)。入力サイズ(`n_examples`, `n_evaluations`, ...)
    は指標とは別に `inputs_summary` に報告され、テスト集合の部分抽出や打ち切られた
    探索が見えるようにする。
-2. **黙って消えるものはない。** 計算できなかった指標は `skipped` に機械可読なコード
+2. **黙って消えるものはない。** 計算できなかった指標は `skipped` に理由コード別
    (`missing_optional_input`, `not_applicable`, `undefined_on_data`,
-   `missing_dependency`)付きで現れ、省略された任意入力もレポートごとに列挙される。
+   `missing_dependency`)で現れる。任意入力の省略によるものは名前だけを列挙し
+   (原因は `omitted_optional_inputs` と `list` の「必要な入力」で分かる)、それ以外は
+   名前 → 理由を持つ。
    skip になるのはこれらの専用ケースだけで、不正な入力やライブラリのバグは
    「未定義」に隠れず例外で失敗する。
 3. **来歴は手書きせず導出する。** タスク署名はタスク宣言(指標名、関数の識別子、
@@ -136,8 +138,8 @@ airas-eval compare nas_post_training --a inputs_A.json --b inputs_B.json
 ## インストール
 
 ```bash
-uv add "airas-eval==0.7.2"     # ライブラリ/CLI として
-uvx airas-eval@0.7.2 list      # インストールせずに CLI だけ使う
+uv add "airas-eval==0.8.0"     # ライブラリ/CLI として
+uvx airas-eval@0.8.0 list      # インストールせずに CLI だけ使う
 ```
 
 評価層が研究の途中で変わらないように、必ずバージョンを固定する。依存: numpy,
@@ -153,7 +155,7 @@ agent の実験コードは **airas_eval を import しない**。agent の成�
 ```toml
 # pyproject.toml — 依存として固定するが、実験コードからは import しない
 [dependency-groups]
-eval = ["airas-eval==0.7.2"]
+eval = ["airas-eval==0.8.0"]
 ```
 
 ```makefile
@@ -190,7 +192,7 @@ report の `inputs_sha256` と入力ファイルの hash、`provenance.versions`
 ```bash
 uv version --bump minor          # 版は pyproject.toml のみ(__version__ はメタデータから読む)
 uv lock && uv run pytest -q
-git commit -am "release: v0.7.2" && git tag v0.7.2 && git push --tags
+git commit -am "release: v0.8.0" && git tag v0.8.0 && git push --tags
 ```
 
 タグの push で `Publish` ワークフローが起動し、HEAD にその版のタグが付いていることを

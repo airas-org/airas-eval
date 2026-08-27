@@ -26,17 +26,17 @@ def test_list_index_is_one_line_per_task():
     assert out.returncode == 0, out.stderr
     for task_type in TASKS:
         assert f"{task_type}:" in out.stdout and f"[{task_type}/v" in out.stdout
-    assert "指標:" not in out.stdout  # no per-metric details in the index
+    assert "指標(" not in out.stdout  # no per-metric details in the index
     assert len(out.stdout.splitlines()) < len(TASKS) + 4
 
 
 def test_list_accepts_several_task_types_and_all():
     two = _run("list", "nas_pre_training", "nas_post_training")
     assert two.returncode == 0, two.stderr
-    assert two.stdout.count("指標:") == 2
+    assert two.stdout.count("指標(") == 2
     assert "classification:  [" not in two.stdout
     everything = _run("list", "--all")
-    assert everything.stdout.count("指標:") == len(TASKS)
+    assert everything.stdout.count("指標(") == len(TASKS)
     index = json.loads(_run("list", "--json").stdout)
     assert set(index) == set(TASKS) and "metrics" not in index["search"]
     assert index["search"]["n_metrics"] == len(TASKS["search"].metrics) + len(
@@ -164,7 +164,7 @@ def test_list_json_is_the_full_contract():
 def test_list_human_output_has_descriptions():
     out = _run("list", "nas_pre_training")
     assert out.returncode == 0, out.stderr
-    assert "入力:" in out.stdout and "指標:" in out.stdout
+    assert "入力:" in out.stdout and "指標(" in out.stdout
     assert "best_so_far " in out.stdout and "(曲線)" in out.stdout
     assert "evaluated_scores?: number[]" in out.stdout  # type, `?` marks optional
     assert "oracle_best?: number" in out.stdout and "[任意]" not in out.stdout

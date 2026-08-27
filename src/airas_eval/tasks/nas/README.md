@@ -30,35 +30,35 @@ NAS の学習前評価。まだ学習していないアーキテクチャにつ�
 | `predicted_scores?: number[]` | 予測器・プロキシが各候補に与えたスコア。高いほど良い候補と予測。reference_scores と対で与える。省略すると予測器の指標は skipped。 |
 | `reference_scores?: number[]` | predicted_scores の各候補の真のスコア(ベンチマークの学習済み精度など)。同じ長さ・順序。 |
 
-| 指標 | 値域 | 良い方向 | 説明 | 実装 | 固定パラメータ |
-|---|---|---|---|---|---|
-| `best_score` | スコアと同じ単位 | 高いほど良い | 探索で評価した候補のうち最良のスコア。 | `airas_eval.metrics.search.best_score` | — |
-| `final_regret` | [0, ∞)、スコアと同じ単位 | 低いほど良い | 最終リグレット。ベンチマークの既知最適値(oracle_best)と探索で見つけた最良スコアの差。0 が最適解到達。 | `airas_eval.metrics.search.final_regret` | — |
-| `mean_anytime_regret` | [0, ∞)、スコアと同じ単位 | 低いほど良い | 平均 anytime リグレット。各評価時点での暫定最良(best-so-far)と最適値の差を全評価にわたって平均したもの。良い候補を早く見つけるほど小さい。 | `airas_eval.metrics.search.mean_anytime_regret` | — |
-| `evaluations_to_best` | [1, n_evaluations] | 低いほど良い | 最終的な最良スコアに初めて到達した評価回数(1 始まり)。 | `airas_eval.metrics.search.evaluations_to_best` | — |
-| `mean_evaluated_score` | スコアと同じ単位 | 高いほど良い | 評価した全候補のスコア平均。偶然見つけた最良値ではなく、探索が選んで評価した候補の質を表す。 | `airas_eval.metrics.search.mean_evaluated_score` | — |
-| `cost_to_best` | [0, total_cost]、コストと同じ単位 | 低いほど良い | 最終的な最良スコアに初めて到達した時点までの累積コスト(学習時間など)。NAS-Bench の推定 wall-clock 軸。 | `airas_eval.metrics.search.cost_to_best` | — |
-| `search_space_fraction_better` | [0, 1] | 低いほど良い | 探索空間全体のうち、見つけた最良候補より真に良い候補の割合。0 なら空間内最良、0.01 なら上位 1%。 | `airas_eval.tasks.nas._metric_sets.search_space_fraction_better` | — |
-| `gain_over_random_search` | (-∞, ∞)、スコアと同じ単位 | 高いほど良い | 同じ評価回数のランダム探索の期待最良値に対する、見つけた最良スコアの差。負ならランダム探索の方が期待値で優れる。 | `airas_eval.tasks.nas._metric_sets.gain_over_random_search` | — |
-| `relative_improvement_over_random` | [-1, ∞) | 高いほど良い | 母集団平均に対する相対改善 (score − mean) / mean。search では探索空間全体、architecture では同一パイプラインで学習したランダムアーキテクチャ群が母集団(Yang et al. 2020)。 | `airas_eval.tasks.nas._metric_sets.relative_improvement_over_random` | — |
-| `kendall_tau` | [-1, 1] | 高いほど良い | Kendall の τ(tau-b)。予測スコアと真のスコアの順位一致度。全候補ペアのうち順序が一致する割合に基づく(−1〜1)。 | `airas_eval.metrics.regression.kendall_tau` | — |
-| `spearman_rho` | [-1, 1] | 高いほど良い | Spearman の ρ。予測スコアと真のスコアの順位相関係数(−1〜1)。 | `airas_eval.metrics.regression.spearman_rho` | — |
-| `precision_at_top_10pct` | [0, 1] | 高いほど良い | 上位 10% の一致率。予測で上位 10% とされた候補集合と、真の上位 10% の集合の重なりの割合。 | `airas_eval.metrics.selection.precision_at_top_fraction` | fraction=0.1 |
-| `selection_regret_at_1` | [0, ∞)、スコアと同じ単位 | 低いほど良い | 選択リグレット@1。予測で 1 位とした候補の真のスコアと、真の最良スコアとの差。予測器を信じて 1 つ選んだときの損失。 | `airas_eval.metrics.selection.selection_regret_at_k` | k=1 |
-| `best_true_rank_in_top_10` | [1, n_candidates] | 低いほど良い | 予測上位 10 件の中に含まれる候補の真の順位の最良値(1 始まり)。1 なら真の最良候補が上位 10 件に入っている。 | `airas_eval.metrics.selection.best_true_rank_in_predicted_top_k` | k=10 |
-| `kendall_tau_top_10pct` | [-1, 1] | 高いほど良い | 真のスコアが上位 10% の候補だけに限定した Kendall の τ。空間全体では順位を当てても上位を取りこぼす予測器を検出する(NAS-Bench-Suite-Zero)。 | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='kendall' |
-| `spearman_rho_top_10pct` | [-1, 1] | 高いほど良い | 真のスコアが上位 10% の候補だけに限定した Spearman の ρ。 | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='spearman' |
-| `best_so_far`(曲線) | スコアと同じ単位、単調非減少 | 高いほど良い | 評価回数ごとの暫定最良スコアの推移(anytime 曲線)。 | `airas_eval.metrics.search.best_so_far` | — |
-| `best_so_far_vs_cost`(曲線) | [累積コスト, スコア] の列 | 高いほど良い | 累積コストに対する暫定最良スコアの推移([累積コスト, best-so-far] の列)。 | `airas_eval.metrics.search.best_so_far_vs_cost` | — |
-| `selection_regret_curve`(曲線) | [0, ∞)、単調非増加 | 低いほど良い | k = 1..n の各 k での選択リグレット。固定 k のスカラーを掃引の中で読むための曲線。 | `airas_eval.metrics.selection.selection_regret_curve` | — |
-| `precision_at_top_k_curve`(曲線) | [0, 1] | 高いほど良い | k = 1..n の各 k での上位 k 集合の一致率(|予測上位k ∩ 真の上位k| / k)。 | `airas_eval.metrics.selection.precision_at_top_k_curve` | — |
+| 指標 | 必要な入力 | 値域 | 良い方向 | 説明 | 実装 | 固定パラメータ |
+|---|---|---|---|---|---|---|
+| `best_score` | `evaluated_scores` | スコアと同じ単位 | 高いほど良い | 探索で評価した候補のうち最良のスコア。 | `airas_eval.metrics.search.best_score` | — |
+| `final_regret` | `evaluated_scores`, `oracle_best` | [0, ∞)、スコアと同じ単位 | 低いほど良い | 最終リグレット。ベンチマークの既知最適値(oracle_best)と探索で見つけた最良スコアの差。0 が最適解到達。 | `airas_eval.metrics.search.final_regret` | — |
+| `mean_anytime_regret` | `evaluated_scores`, `oracle_best` | [0, ∞)、スコアと同じ単位 | 低いほど良い | 平均 anytime リグレット。各評価時点での暫定最良(best-so-far)と最適値の差を全評価にわたって平均したもの。良い候補を早く見つけるほど小さい。 | `airas_eval.metrics.search.mean_anytime_regret` | — |
+| `evaluations_to_best` | `evaluated_scores` | [1, n_evaluations] | 低いほど良い | 最終的な最良スコアに初めて到達した評価回数(1 始まり)。 | `airas_eval.metrics.search.evaluations_to_best` | — |
+| `mean_evaluated_score` | `evaluated_scores` | スコアと同じ単位 | 高いほど良い | 評価した全候補のスコア平均。偶然見つけた最良値ではなく、探索が選んで評価した候補の質を表す。 | `airas_eval.metrics.search.mean_evaluated_score` | — |
+| `cost_to_best` | `evaluated_scores`, `evaluation_costs` | [0, total_cost]、コストと同じ単位 | 低いほど良い | 最終的な最良スコアに初めて到達した時点までの累積コスト(学習時間など)。NAS-Bench の推定 wall-clock 軸。 | `airas_eval.metrics.search.cost_to_best` | — |
+| `search_space_fraction_better` | `evaluated_scores`, `search_space_scores` | [0, 1] | 低いほど良い | 探索空間全体のうち、見つけた最良候補より真に良い候補の割合。0 なら空間内最良、0.01 なら上位 1%。 | `airas_eval.tasks.nas._metric_sets.search_space_fraction_better` | — |
+| `gain_over_random_search` | `evaluated_scores`, `search_space_scores` | (-∞, ∞)、スコアと同じ単位 | 高いほど良い | 同じ評価回数のランダム探索の期待最良値に対する、見つけた最良スコアの差。負ならランダム探索の方が期待値で優れる。 | `airas_eval.tasks.nas._metric_sets.gain_over_random_search` | — |
+| `relative_improvement_over_random` | `evaluated_scores`, `search_space_scores` | [-1, ∞) | 高いほど良い | 母集団平均に対する相対改善 (score − mean) / mean。search では探索空間全体、architecture では同一パイプラインで学習したランダムアーキテクチャ群が母集団(Yang et al. 2020)。 | `airas_eval.tasks.nas._metric_sets.relative_improvement_over_random` | — |
+| `kendall_tau` | `predicted_scores`, `reference_scores` | [-1, 1] | 高いほど良い | Kendall の τ(tau-b)。予測スコアと真のスコアの順位一致度。全候補ペアのうち順序が一致する割合に基づく(−1〜1)。 | `airas_eval.metrics.regression.kendall_tau` | — |
+| `spearman_rho` | `predicted_scores`, `reference_scores` | [-1, 1] | 高いほど良い | Spearman の ρ。予測スコアと真のスコアの順位相関係数(−1〜1)。 | `airas_eval.metrics.regression.spearman_rho` | — |
+| `precision_at_top_10pct` | `predicted_scores`, `reference_scores` | [0, 1] | 高いほど良い | 上位 10% の一致率。予測で上位 10% とされた候補集合と、真の上位 10% の集合の重なりの割合。 | `airas_eval.metrics.selection.precision_at_top_fraction` | fraction=0.1 |
+| `selection_regret_at_1` | `predicted_scores`, `reference_scores` | [0, ∞)、スコアと同じ単位 | 低いほど良い | 選択リグレット@1。予測で 1 位とした候補の真のスコアと、真の最良スコアとの差。予測器を信じて 1 つ選んだときの損失。 | `airas_eval.metrics.selection.selection_regret_at_k` | k=1 |
+| `best_true_rank_in_top_10` | `predicted_scores`, `reference_scores` | [1, n_candidates] | 低いほど良い | 予測上位 10 件の中に含まれる候補の真の順位の最良値(1 始まり)。1 なら真の最良候補が上位 10 件に入っている。 | `airas_eval.metrics.selection.best_true_rank_in_predicted_top_k` | k=10 |
+| `kendall_tau_top_10pct` | `predicted_scores`, `reference_scores` | [-1, 1] | 高いほど良い | 真のスコアが上位 10% の候補だけに限定した Kendall の τ。空間全体では順位を当てても上位を取りこぼす予測器を検出する(NAS-Bench-Suite-Zero)。 | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='kendall' |
+| `spearman_rho_top_10pct` | `predicted_scores`, `reference_scores` | [-1, 1] | 高いほど良い | 真のスコアが上位 10% の候補だけに限定した Spearman の ρ。 | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='spearman' |
+| `best_so_far`(曲線) | `evaluated_scores` | スコアと同じ単位、単調非減少 | 高いほど良い | 評価回数ごとの暫定最良スコアの推移(anytime 曲線)。 | `airas_eval.metrics.search.best_so_far` | — |
+| `best_so_far_vs_cost`(曲線) | `evaluated_scores`, `evaluation_costs` | [累積コスト, スコア] の列 | 高いほど良い | 累積コストに対する暫定最良スコアの推移([累積コスト, best-so-far] の列)。 | `airas_eval.metrics.search.best_so_far_vs_cost` | — |
+| `selection_regret_curve`(曲線) | `predicted_scores`, `reference_scores` | [0, ∞)、単調非増加 | 低いほど良い | k = 1..n の各 k での選択リグレット。固定 k のスカラーを掃引の中で読むための曲線。 | `airas_eval.metrics.selection.selection_regret_curve` | — |
+| `precision_at_top_k_curve`(曲線) | `predicted_scores`, `reference_scores` | [0, 1] | 高いほど良い | k = 1..n の各 k での上位 k 集合の一致率(|予測上位k ∩ 真の上位k| / k)。 | `airas_eval.metrics.selection.precision_at_top_k_curve` | — |
 
 入力サイズ(指標ではない):
 
-- `n_evaluations` — 探索で評価した候補数(評価予算)。
-- `total_cost` — 評価した全候補のコスト合計(消費した推定予算)。
-- `n_search_space` — 探索空間に含まれる候補の総数。
-- `n_candidates` — 順位付けの対象となった候補数。
+- `n_evaluations` <- `evaluated_scores` — 探索で評価した候補数(評価予算)。
+- `total_cost` <- `evaluated_scores`, `evaluation_costs` — 評価した全候補のコスト合計(消費した推定予算)。
+- `n_search_space` <- `search_space_scores` — 探索空間に含まれる候補の総数。
+- `n_candidates` <- `predicted_scores`, `reference_scores` — 順位付けの対象となった候補数。
 
 ### `nas_post_training`
 
@@ -79,34 +79,34 @@ NAS の学習後評価。探索で選ばれ、実際に学習した最終アー�
 | `reference_point?: number[]` | hypervolume の参照点(各目的の許容最悪値)。実験設計で固定し、結果を見てから選ばない。省略すると hypervolume は skipped。 |
 | `reference_front?: number[][]` | 既知の参照 Pareto フロント。IGD/GD に使う。省略するとそれらは skipped。 |
 
-| 指標 | 値域 | 良い方向 | 説明 | 実装 | 固定パラメータ |
-|---|---|---|---|---|---|
-| `accuracy` | [0, 1] | 高いほど良い | 正解率。予測ラベルが正解ラベルと一致した割合。 | `airas_eval.metrics.classification.accuracy` | — |
-| `precision_macro` | [0, 1] | 高いほど良い | 適合率(マクロ平均)。クラスごとの適合率を単純平均した値で、少数クラスも等しく重み付けされる。 | `airas_eval.metrics.classification.precision` | average='macro' |
-| `recall_macro` | [0, 1] | 高いほど良い | 再現率(マクロ平均)。クラスごとの再現率を単純平均した値。 | `airas_eval.metrics.classification.recall` | average='macro' |
-| `f1_macro` | [0, 1] | 高いほど良い | F1 スコア(マクロ平均)。クラスごとの適合率と再現率の調和平均を単純平均した値。 | `airas_eval.metrics.classification.f1` | average='macro' |
-| `balanced_accuracy` | [0, 1] | 高いほど良い | 均衡正解率。クラスごとの再現率の平均で、クラス不均衡の影響を受けない正解率。 | `airas_eval.metrics.classification.balanced_accuracy` | — |
-| `matthews_corrcoef` | [-1, 1] | 高いほど良い | Matthews 相関係数(MCC)。混同行列全体を使う相関係数で、不均衡データでも偶然の一致に惑わされにくい(−1〜1)。 | `airas_eval.metrics.classification.matthews_corrcoef` | — |
-| `log_loss` | [0, ∞) | 低いほど良い | 対数損失(交差エントロピー)。正解クラスに割り当てた確率の負の対数の平均。確率の質を測り、低いほど良い。 | `airas_eval.metrics.classification.log_loss` | — |
-| `expected_calibration_error` | [0, 1] | 低いほど良い | 期待較正誤差(ECE)。予測確信度をビン分けし、各ビンで確信度と実際の正解率のずれを重み付き平均したもの。低いほど確率が較正されている。 | `airas_eval.metrics.classification.expected_calibration_error` | n_bins=15 |
-| `top_5_accuracy` | [0, 1] | 高いほど良い | Top-5 正解率。確率上位 5 クラスの中に正解が含まれる割合(ImageNet 系の標準指標)。 | `airas_eval.tasks.generic._metric_sets.top_5_accuracy` | — |
-| `relative_improvement_over_random` | [-1, ∞) | 高いほど良い | 母集団平均に対する相対改善 (score − mean) / mean。search では探索空間全体、architecture では同一パイプラインで学習したランダムアーキテクチャ群が母集団(Yang et al. 2020)。 | `airas_eval.tasks.nas._metric_sets.relative_improvement_over_random_architectures` | — |
-| `fraction_of_random_better` | [0, 1] | 低いほど良い | 同一パイプラインで学習したランダムアーキテクチャのうち、最終アーキテクチャより精度が高いものの割合。 | `airas_eval.tasks.nas._metric_sets.fraction_of_random_architectures_better` | — |
-| `test_regret` | [0, 1] | 低いほど良い | テストリグレット。ベンチマークの公表テスト最適値と、学習済み最終アーキテクチャのテスト正解率の差(いずれも 0〜1 の割合)。 | `airas_eval.tasks.nas._metric_sets.test_regret` | — |
-| `pareto_front_size` | [1, n_points] | — | Pareto フロント(非劣解)上の点の数。 | `airas_eval.tasks.generic._metric_sets.pareto_front_size` | — |
-| `hypervolume_2d` | [0, ∞)、目的の単位の積 | 高いほど良い | ハイパーボリューム(2 目的)。Pareto フロントが参照点に対して支配する面積。フロントが良いほど大きい(全目的最小化)。 | `airas_eval.metrics.pareto.hypervolume_2d` | — |
-| `igd` | [0, ∞) | 低いほど良い | 逆世代距離(IGD)。既知の参照フロントの各点から得られたフロントへの最近距離の平均。参照フロントをどれだけ広く近くカバーしたかを測り、低いほど良い。 | `airas_eval.metrics.pareto.igd` | — |
-| `gd` | [0, ∞) | 低いほど良い | 世代距離(GD)。得られた各点から参照フロントへの最近距離の平均。収束度を測り、低いほど良い。 | `airas_eval.metrics.pareto.gd` | — |
-| `spacing` | [0, ∞) | 低いほど良い | Spacing(Schott)。フロント上の点の最近傍距離の標準偏差。0 に近いほど点が均等に分布している。 | `airas_eval.metrics.pareto.spacing` | — |
-| `pareto_front`(曲線) | 目的ベクトルの列 | — | 非劣解の点集合(第 1 目的で昇順)。 | `airas_eval.metrics.pareto.pareto_front` | — |
+| 指標 | 必要な入力 | 値域 | 良い方向 | 説明 | 実装 | 固定パラメータ |
+|---|---|---|---|---|---|---|
+| `accuracy` | `predicted_labels`, `reference_labels` | [0, 1] | 高いほど良い | 正解率。予測ラベルが正解ラベルと一致した割合。 | `airas_eval.metrics.classification.accuracy` | — |
+| `precision_macro` | `predicted_labels`, `reference_labels` | [0, 1] | 高いほど良い | 適合率(マクロ平均)。クラスごとの適合率を単純平均した値で、少数クラスも等しく重み付けされる。 | `airas_eval.metrics.classification.precision` | average='macro' |
+| `recall_macro` | `predicted_labels`, `reference_labels` | [0, 1] | 高いほど良い | 再現率(マクロ平均)。クラスごとの再現率を単純平均した値。 | `airas_eval.metrics.classification.recall` | average='macro' |
+| `f1_macro` | `predicted_labels`, `reference_labels` | [0, 1] | 高いほど良い | F1 スコア(マクロ平均)。クラスごとの適合率と再現率の調和平均を単純平均した値。 | `airas_eval.metrics.classification.f1` | average='macro' |
+| `balanced_accuracy` | `predicted_labels`, `reference_labels` | [0, 1] | 高いほど良い | 均衡正解率。クラスごとの再現率の平均で、クラス不均衡の影響を受けない正解率。 | `airas_eval.metrics.classification.balanced_accuracy` | — |
+| `matthews_corrcoef` | `predicted_labels`, `reference_labels` | [-1, 1] | 高いほど良い | Matthews 相関係数(MCC)。混同行列全体を使う相関係数で、不均衡データでも偶然の一致に惑わされにくい(−1〜1)。 | `airas_eval.metrics.classification.matthews_corrcoef` | — |
+| `log_loss` | `probabilities`, `reference_labels` | [0, ∞) | 低いほど良い | 対数損失(交差エントロピー)。正解クラスに割り当てた確率の負の対数の平均。確率の質を測り、低いほど良い。 | `airas_eval.metrics.classification.log_loss` | — |
+| `expected_calibration_error` | `probabilities`, `reference_labels` | [0, 1] | 低いほど良い | 期待較正誤差(ECE)。予測確信度をビン分けし、各ビンで確信度と実際の正解率のずれを重み付き平均したもの。低いほど確率が較正されている。 | `airas_eval.metrics.classification.expected_calibration_error` | n_bins=15 |
+| `top_5_accuracy` | `probabilities`, `reference_labels` | [0, 1] | 高いほど良い | Top-5 正解率。確率上位 5 クラスの中に正解が含まれる割合(ImageNet 系の標準指標)。 | `airas_eval.tasks.generic._metric_sets.top_5_accuracy` | — |
+| `relative_improvement_over_random` | `predicted_labels`, `reference_labels`, `random_architecture_accuracies` | [-1, ∞) | 高いほど良い | 母集団平均に対する相対改善 (score − mean) / mean。search では探索空間全体、architecture では同一パイプラインで学習したランダムアーキテクチャ群が母集団(Yang et al. 2020)。 | `airas_eval.tasks.nas._metric_sets.relative_improvement_over_random_architectures` | — |
+| `fraction_of_random_better` | `predicted_labels`, `reference_labels`, `random_architecture_accuracies` | [0, 1] | 低いほど良い | 同一パイプラインで学習したランダムアーキテクチャのうち、最終アーキテクチャより精度が高いものの割合。 | `airas_eval.tasks.nas._metric_sets.fraction_of_random_architectures_better` | — |
+| `test_regret` | `predicted_labels`, `reference_labels`, `oracle_test_best` | [0, 1] | 低いほど良い | テストリグレット。ベンチマークの公表テスト最適値と、学習済み最終アーキテクチャのテスト正解率の差(いずれも 0〜1 の割合)。 | `airas_eval.tasks.nas._metric_sets.test_regret` | — |
+| `pareto_front_size` | `points` | [1, n_points] | — | Pareto フロント(非劣解)上の点の数。 | `airas_eval.tasks.generic._metric_sets.pareto_front_size` | — |
+| `hypervolume_2d` | `points`, `reference_point` | [0, ∞)、目的の単位の積 | 高いほど良い | ハイパーボリューム(2 目的)。Pareto フロントが参照点に対して支配する面積。フロントが良いほど大きい(全目的最小化)。 | `airas_eval.metrics.pareto.hypervolume_2d` | — |
+| `igd` | `points`, `reference_front` | [0, ∞) | 低いほど良い | 逆世代距離(IGD)。既知の参照フロントの各点から得られたフロントへの最近距離の平均。参照フロントをどれだけ広く近くカバーしたかを測り、低いほど良い。 | `airas_eval.metrics.pareto.igd` | — |
+| `gd` | `points`, `reference_front` | [0, ∞) | 低いほど良い | 世代距離(GD)。得られた各点から参照フロントへの最近距離の平均。収束度を測り、低いほど良い。 | `airas_eval.metrics.pareto.gd` | — |
+| `spacing` | `points` | [0, ∞) | 低いほど良い | Spacing(Schott)。フロント上の点の最近傍距離の標準偏差。0 に近いほど点が均等に分布している。 | `airas_eval.metrics.pareto.spacing` | — |
+| `pareto_front`(曲線) | `points` | 目的ベクトルの列 | — | 非劣解の点集合(第 1 目的で昇順)。 | `airas_eval.metrics.pareto.pareto_front` | — |
 
 入力サイズ(指標ではない):
 
-- `n_examples` — 評価に使われた事例数。
-- `n_classes` — 確率行列の列数(クラス数)。
-- `n_random_architectures` — ベースラインとして与えられたランダムアーキテクチャの数。
-- `n_points` — 評価対象の候補(目的ベクトル)の数。
-- `n_objectives` — 目的関数の数。
+- `n_examples` <- `predicted_labels`, `reference_labels` — 評価に使われた事例数。
+- `n_classes` <- `probabilities` — 確率行列の列数(クラス数)。
+- `n_random_architectures` <- `random_architecture_accuracies` — ベースラインとして与えられたランダムアーキテクチャの数。
+- `n_points` <- `points` — 評価対象の候補(目的ベクトル)の数。
+- `n_objectives` <- `points` — 目的関数の数。
 
 事例ごとのスコア(`compare` 用、指標ではない):
 
