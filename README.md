@@ -139,8 +139,8 @@ airas-eval compare nas_post_training --a inputs_A.json --b inputs_B.json
 ## インストール
 
 ```bash
-uv add "airas-eval==0.4.1"     # ライブラリ/CLI として
-uvx airas-eval@0.4.1 list      # インストールせずに CLI だけ使う
+uv add "airas-eval==0.4.2"     # ライブラリ/CLI として
+uvx airas-eval@0.4.2 list      # インストールせずに CLI だけ使う
 ```
 
 評価層が研究の途中で変わらないように、必ずバージョンを固定する。依存: numpy,
@@ -156,7 +156,7 @@ agent の実験コードは **airas_eval を import しない**。agent の成�
 ```toml
 # pyproject.toml — 依存として固定するが、実験コードからは import しない
 [dependency-groups]
-eval = ["airas-eval==0.4.1"]
+eval = ["airas-eval==0.4.2"]
 ```
 
 ```makefile
@@ -193,7 +193,7 @@ report の `inputs_sha256` と入力ファイルの hash、`provenance.versions`
 ```bash
 uv version --bump minor          # 版は pyproject.toml のみ(__version__ はメタデータから読む)
 uv lock && uv run pytest -q
-git commit -am "release: v0.4.1" && git tag v0.4.1 && git push --tags
+git commit -am "release: v0.4.2" && git tag v0.4.2 && git push --tags
 ```
 
 タグの push で `Publish` ワークフローが起動し、HEAD にその版のタグが付いていることを

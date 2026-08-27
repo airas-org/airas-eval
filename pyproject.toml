@@ -1,6 +1,6 @@
 [project]
 name = "airas-eval"
-version = "0.4.1"
+version = "0.4.2"
 description = "Trusted evaluation layer for AIRAS: the full fixed set of standard metrics per task type, computed from raw predictions"
 readme = "README.md"
 license = "MIT"
