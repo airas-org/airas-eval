@@ -1,11 +1,11 @@
 [project]
 name = "airas-eval"
-version = "0.4.0"
+version = "0.4.1"
 description = "Trusted evaluation layer for AIRAS: the full fixed set of standard metrics per task type, computed from raw predictions"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10"
 authors = [{ name = "airas-org" }]
 keywords = ["evaluation", "metrics", "neural-architecture-search", "reproducibility", "ai-scientist"]
 classifiers = [
@@ -16,6 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Typing :: Typed",
 ]
