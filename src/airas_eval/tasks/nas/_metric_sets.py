@@ -1,8 +1,7 @@
-"""NAS bundles = the core bundle's bindings + NAS-specific ones.
+"""NAS metric sets = the core set's bindings + NAS-specific ones.
 
-The core part is *the same tuple object* as the generic bundle uses, so the
-``search`` group of ``nas_pre_training`` contains everything a ``search``
-report does, plus
+The core part is *the same tuple object* as the generic set uses, so a
+``nas_pre_training`` report contains everything a ``search`` report does, plus
 what the NAS literature adds: the estimated-wall-clock axis (NAS-Bench-101 /
 201), position in the search space and a closed-form random-search baseline
 at equal budget (Lindauer & Hutter 2020; Yang et al. 2020), validation vs
@@ -14,9 +13,8 @@ from airas_eval.metrics import classification as _cls
 from airas_eval.metrics import population as _pop
 from airas_eval.metrics import search as _search
 from airas_eval.metrics import selection as _sel
-from airas_eval.spec import Bundle, MetricBinding
-from airas_eval.tasks import _bundles as core
-from airas_eval.tasks.nas._inputs import NasArchitectureInputs, NasSearchInputs
+from airas_eval.spec import MetricBinding, MetricSet
+from airas_eval.tasks.generic import _metric_sets as core
 
 # --- search --------------------------------------------------------------------
 
@@ -53,8 +51,7 @@ def n_search_space(search_space_scores: list[float]) -> float:
     return float(len(search_space_scores))
 
 
-SEARCH = Bundle(
-    input_model=NasSearchInputs,
+SEARCH = MetricSet(
     provenance_packages=core.SEARCH.provenance_packages,
     notes=(
         core.SEARCH.notes + "。コストはベンチマークが公表する各アーキテクチャの学習"
@@ -119,8 +116,7 @@ SEARCH = Bundle(
 
 _PAIR = ("predicted_scores", "reference_scores")
 
-PREDICTOR = Bundle(
-    input_model=core.CANDIDATE_RANKING.input_model,
+PREDICTOR = MetricSet(
     provenance_packages=core.CANDIDATE_RANKING.provenance_packages,
     notes=(
         core.CANDIDATE_RANKING.notes
@@ -190,8 +186,7 @@ def test_regret(
     )
 
 
-ARCHITECTURE = Bundle(
-    input_model=NasArchitectureInputs,
+ARCHITECTURE = MetricSet(
     per_example=core.CLASSIFICATION.per_example,
     provenance_packages=core.CLASSIFICATION.provenance_packages,
     notes=(

@@ -1,6 +1,6 @@
 [project]
 name = "airas-eval"
-version = "0.6.0"
+version = "0.7.0"
 description = "Trusted evaluation layer for AIRAS: the full fixed set of standard metrics per task type, computed from raw predictions"
 readme = "README.md"
 license = "MIT"
@@ -58,9 +58,9 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 # Metric descriptions are Japanese prose; wrapping them hurts more than it helps.
-"src/airas_eval/tasks/_bundles.py" = ["E501"]
-"src/airas_eval/tasks/nas/_bundles.py" = ["E501"]
-"src/airas_eval/tasks/_inputs.py" = ["E501"]
+"src/airas_eval/tasks/generic/_metric_sets.py" = ["E501"]
+"src/airas_eval/tasks/nas/_metric_sets.py" = ["E501"]
+"src/airas_eval/tasks/generic/_inputs.py" = ["E501"]
 "src/airas_eval/tasks/nas/_inputs.py" = ["E501"]
 
 [tool.mypy]

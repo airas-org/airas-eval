@@ -5,8 +5,8 @@ performance is measured.
   during search, predictors, zero-cost proxies.
 * ``nas_post_training`` — performance of the trained final architecture.
 
-Each is the corresponding generic task(s) plus what the NAS literature adds
-(see ``_bundles``).
+Each is the corresponding generic metric set(s) plus what the NAS literature
+adds (see ``_metric_sets``).
 """
 
 from airas_eval.tasks.nas import post_training, pre_training

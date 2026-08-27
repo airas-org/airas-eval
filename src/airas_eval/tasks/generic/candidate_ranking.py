@@ -1,9 +1,9 @@
-"""Generic task: the full candidate ranking bundle as a single required group."""
+"""Generic task: the full candidate_ranking metric set over its own inputs."""
 
-from airas_eval.spec import Group, TaskSpec
-from airas_eval.tasks import _bundles
+from airas_eval.spec import TaskSpec
+from airas_eval.tasks.generic import _metric_sets
+from airas_eval.tasks.generic._inputs import CandidateRankingInputs
 
-TASK = TaskSpec(
-    task_type="candidate_ranking",
-    groups=(Group("candidate_ranking", _bundles.CANDIDATE_RANKING),),
+TASK = TaskSpec.from_sets(
+    "candidate_ranking", CandidateRankingInputs, _metric_sets.CANDIDATE_RANKING
 )

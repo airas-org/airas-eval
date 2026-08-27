@@ -60,10 +60,10 @@ def test_every_nas_task_has_an_example():
 
 def test_invalid_inputs_fail_nonzero(tmp_path: Path):
     bad = tmp_path / "bad.json"
-    bad.write_text(json.dumps({"evaluated_scores": [1.0]}))  # ungrouped
+    bad.write_text(json.dumps({"evaluated_scores": [1.0], "typo": 1}))
     out = _run("score", "nas_pre_training", "--inputs", str(bad))
     assert out.returncode != 0
-    assert "unknown group" in out.stderr
+    assert "invalid inputs" in out.stderr
     assert _run("score", "no_such_task", "--inputs", str(bad)).returncode != 0
 
 
@@ -71,7 +71,8 @@ def test_schema_and_validate(tmp_path: Path):
     out = _run("schema", "nas_post_training")
     assert out.returncode == 0, out.stderr
     schema = json.loads(out.stdout)
-    assert schema["required"] == ["architecture"]
+    assert schema["required"] == ["predicted_labels", "reference_labels"]
+    assert schema["additionalProperties"] is False
     ok = _run(
         "validate",
         "nas_post_training",
@@ -80,7 +81,7 @@ def test_schema_and_validate(tmp_path: Path):
     )
     assert ok.returncode == 0 and ok.stdout.startswith("OK:"), ok.stderr
     bad = tmp_path / "bad.json"
-    bad.write_text(json.dumps({"architecture": {"predicted_labels": [0]}}))
+    bad.write_text(json.dumps({"predicted_labels": [0]}))
     res = _run("validate", "nas_post_training", "--inputs", str(bad))
     assert res.returncode == 1 and res.stderr.startswith("INVALID:")
 
@@ -106,13 +107,10 @@ def test_aggregate_and_compare(tmp_path: Path):
     assert agg.returncode == 0, agg.stderr
     payload = json.loads(agg.stdout)
     assert payload["n_reports"] == 2
-    assert payload["metrics"]["architecture.accuracy"]["std"] == 0.0
+    assert payload["metrics"]["accuracy"]["std"] == 0.0
     cmp = _run("compare", "nas_post_training", "--a", str(example), "--b", str(example))
     assert cmp.returncode == 0, cmp.stderr
-    assert (
-        json.loads(cmp.stdout)["comparisons"]["architecture.correct"]["mean_diff"]
-        == 0.0
-    )
+    assert json.loads(cmp.stdout)["comparisons"]["correct"]["mean_diff"] == 0.0
 
 
 def test_list_json_is_the_full_contract():
@@ -121,15 +119,13 @@ def test_list_json_is_the_full_contract():
     payload = json.loads(out.stdout)
     task = payload["nas_post_training"]
     assert task["signature"] == TASKS["nas_post_training"].signature()
-    groups = {g["name"]: g for g in task["groups"]}
-    assert groups["architecture"]["required"] is True
-    names = {m["name"] for m in groups["architecture"]["metrics"]}
-    assert "architecture.accuracy" in names
-    assert all(m["description"] for g in task["groups"] for m in g["metrics"])
-    kinds = {m["kind"] for g in task["groups"] for m in g["metrics"]}
-    assert kinds == {"scalar", "curve"}
-    assert groups["architecture"]["per_example"][0]["name"] == "architecture.correct"
-    inputs = {i["name"]: i for i in groups["architecture"]["inputs"]}
+    names = {m["name"] for m in task["metrics"]}
+    assert {"accuracy", "test_regret", "hypervolume_2d"} <= names
+    assert all(m["description"] for m in task["metrics"])
+    assert {m["kind"] for m in task["metrics"]} == {"scalar", "curve"}
+    assert task["per_example"][0]["name"] == "correct"
+    assert task["required_inputs"] == ["predicted_labels", "reference_labels"]
+    inputs = {i["name"]: i for i in task["inputs"]}
     assert inputs["predicted_labels"] == {
         "name": "predicted_labels",
         "type": "int[]",
@@ -143,12 +139,10 @@ def test_list_json_is_the_full_contract():
 def test_list_human_output_has_descriptions():
     out = _run("list", "nas_pre_training")
     assert out.returncode == 0, out.stderr
-    assert "グループ search(任意)" in out.stdout
-    assert "レポートの指標キーは search.<名前>" in out.stdout
+    assert "入力:" in out.stdout and "指標:" in out.stdout
     assert "best_so_far " in out.stdout and "(曲線)" in out.stdout
-    assert (
-        "search.best_so_far" not in out.stdout
-    )  # group prefix shown once, not per row
-    assert "evaluated_scores: number[]" in out.stdout  # inputs carry their type
-    assert "oracle_best: number" in out.stdout and "[任意]" in out.stdout
+    assert "evaluated_scores?: number[]" in out.stdout  # type, `?` marks optional
+    assert "oracle_best?: number" in out.stdout and "[任意]" not in out.stdout
+    post = _run("list", "nas_post_training").stdout
+    assert "predicted_labels: int[]" in post and "probabilities?: number[][]" in post
     assert "fraction=0.1" in out.stdout  # pinned parameters are visible

@@ -1,8 +1,7 @@
-"""Reusable metric bundles: the building blocks tasks are composed from.
-
-A bundle is "all the standard metrics over one input shape". Bundles are
-module constants — not registered, not evaluable on their own — so a caller
-can only ever pick a task type, never a subset of it. Adapters that need
+"""Reusable metric sets: the internal building blocks tasks are assembled
+from. A set is "all the standard metrics over one input shape", written once
+so several tasks can share it. Sets are module constants — not registered,
+not evaluable on their own — so a caller can only ever pick a task type. Adapters that need
 task-shape knowledge (binary-only metrics, top-5 needing > 5 classes, input
 counts) live here as named module-level functions so they carry a stable
 qualname into the task signature.
@@ -16,13 +15,7 @@ from airas_eval.metrics import pareto as _pareto
 from airas_eval.metrics import regression as _reg
 from airas_eval.metrics import search as _search
 from airas_eval.metrics import selection as _sel
-from airas_eval.spec import Bundle, MetricBinding
-from airas_eval.tasks._inputs import (
-    CandidateRankingInputs,
-    ClassificationInputs,
-    MultiobjectiveInputs,
-    SearchInputs,
-)
+from airas_eval.spec import MetricBinding, MetricSet
 
 Probs = list[list[float]]
 Labels = list[int]
@@ -101,8 +94,7 @@ def top_5_accuracy(probabilities: Probs, reference_labels: Labels) -> float:
 _LABELS = ("predicted_labels", "reference_labels")
 _PROBS = ("probabilities", "reference_labels")
 
-CLASSIFICATION = Bundle(
-    input_model=ClassificationInputs,
+CLASSIFICATION = MetricSet(
     per_example=_CORRECT,
     provenance_packages=("numpy", "scikit-learn"),
     notes=(
@@ -183,8 +175,7 @@ CLASSIFICATION = Bundle(
     ),
 )
 
-BINARY_CLASSIFICATION = Bundle(
-    input_model=ClassificationInputs,
+BINARY_CLASSIFICATION = MetricSet(
     per_example=_CORRECT,
     provenance_packages=("numpy", "scikit-learn"),
     notes=(
@@ -280,8 +271,7 @@ def n_evaluations(evaluated_scores: list[float]) -> float:
 _SCORES = ("evaluated_scores",)
 _WITH_ORACLE = ("evaluated_scores", "oracle_best")
 
-SEARCH = Bundle(
-    input_model=SearchInputs,
+SEARCH = MetricSet(
     provenance_packages=("numpy",),
     notes=(
         "スコアは高いほど良く、評価順に並ぶ。oracle_best は実験設計で固定する。"
@@ -350,8 +340,7 @@ def n_candidates(predicted_scores: list[float], reference_scores: list[float]) -
 
 _PAIR = ("predicted_scores", "reference_scores")
 
-CANDIDATE_RANKING = Bundle(
-    input_model=CandidateRankingInputs,
+CANDIDATE_RANKING = MetricSet(
     provenance_packages=("numpy", "scipy"),
     notes=(
         "スコアは高いほど良い。Kendall は tau-b。上位 k 集合は同点を安定な降順で"
@@ -436,8 +425,7 @@ def pareto_front_size(points: list[list[float]]) -> float:
 
 _POINTS = ("points",)
 
-MULTIOBJECTIVE = Bundle(
-    input_model=MultiobjectiveInputs,
+MULTIOBJECTIVE = MetricSet(
     provenance_packages=("numpy",),
     notes=(
         "全目的を最小化する。hypervolume は 2 目的の厳密計算。IGD/GD/spacing は"

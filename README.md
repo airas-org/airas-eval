@@ -14,29 +14,29 @@
    もの(ECE、リグレット、上位 k 選択、2 目的ハイパーボリューム、IGD/GD/spacing)
    だけを自前で実装して variant を固定し、性質テストで検証している。
 2. **`tasks/`** — エリアごとに 1 サブパッケージ、タスクタイプごとに 1 モジュール。
-   タスクタイプとは「その種類の研究が報告すべき指標の全集合」で、検証済みの入力
-   グループから計算される(グループあたり 5〜12 指標、スカラーまたは曲線、variant は
+   タスクタイプとは「その種類の研究が報告すべき指標の全集合」で、1 つの検証済み
+   入力ファイルから計算される(タスクあたり数十指標まで、スカラーまたは曲線、variant は
    すべて固定)。`generic/` が基本となる評価ファミリー、エリアパッケージ(`nas/`)
-   はその上に積む — エリアのバンドルは *基本のバインディング + その分野の文献が
+   はその上に積む — エリアの指標セットは *基本のバインディング + その分野の文献が
    追加するもの* であり、名前を変えた複製ではない。再利用部品
-   (`tasks/_bundles.py`, `tasks/nas/_bundles.py`)は単なる定数で、登録も単独評価も
-   されない。
+   (`tasks/generic/_metric_sets.py`, `tasks/nas/_metric_sets.py`)は内部の定数で、登録も
+   公開も単独評価もされない。
 
 ```
 tasks/
 ├── generic/   classification, binary_classification, search, candidate_ranking, multiobjective
-└── nas/       nas_pre_training  = search(+ wall-clock 軸、探索空間内順位、ランダム探索
-               │                    ベースライン)と predictor(candidate_ranking + 上位 10% 相関)
-               └── nas_post_training = architecture(classification + ランダムアーキテクチャ比、
-                                    テストリグレット)と tradeoff(multiobjective)
+└── nas/       nas_pre_training  = search + candidate_ranking の全指標 + NAS 追加分(wall-clock 軸、
+               │                    探索空間内順位、ランダム探索比、上位 10% 相関)
+               └── nas_post_training = classification + multiobjective の全指標 + NAS 追加分
+                                    (ランダムアーキテクチャ比、テストリグレット)
 ```
 
 NAS は「アーキテクチャの性能をいつ測るか」で 2 タスクに分かれる:
 
-| タスクタイプ | 測るもの | グループ |
+| タスクタイプ | 測るもの | 入力(1 ファイル) |
 |---|---|---|
-| `nas_pre_training` | 学習前のアーキテクチャ性能 — ベンチマーク参照による探索、性能予測器、ゼロコストプロキシ | `search`(任意)、`predictor`(任意)。少なくとも 1 つ |
-| `nas_post_training` | 学習後のアーキテクチャ性能 — 選ばれて学習された最終アーキテクチャ | `architecture`(必須)、`tradeoff`(任意) |
+| `nas_pre_training` | 学習前のアーキテクチャ性能 — ベンチマーク参照による探索、性能予測器、ゼロコストプロキシ | 探索軌跡(`evaluated_scores` …)か予測器スコア(`predicted_scores` + `reference_scores`)の少なくとも一方。無い側の指標は skipped |
+| `nas_post_training` | 学習後のアーキテクチャ性能 — 選ばれて学習された最終アーキテクチャ | 予測ラベル・正解ラベル(必須)、確率・ベースライン・テスト最適値・(誤り率, コスト) 点集合(任意) |
 
 ## 各タスクは何を返すか(指標の説明)
 
@@ -70,23 +70,19 @@ from airas_eval import evaluate
 report = evaluate(
     "nas_post_training",
     {
-        "architecture": {
-            "predicted_labels": y_pred,
-            "reference_labels": y_true,
-            "probabilities": probs,  # 任意
-            "oracle_test_best": 0.9437,  # 任意: ベンチマークのテスト最適値(0〜1)
-        },
-        "tradeoff": {  # 任意グループ
-            "points": [[error, macs], ...],  # 全目的を最小化
-            "reference_point": [0.2, 1e9],
-        },
+        "predicted_labels": y_pred,
+        "reference_labels": y_true,
+        "probabilities": probs,  # 任意
+        "oracle_test_best": 0.9437,  # 任意: ベンチマークのテスト最適値(0〜1)
+        "points": [[error, macs], ...],  # 任意: 精度–効率トレードオフ(全目的を最小化)
+        "reference_point": [0.2, 1e9],
     },
 )
-report.metrics  # スカラー指標: {"architecture.accuracy": ..., "tradeoff.hypervolume_2d": ...}
-report.curves  # 曲線指標: {"tradeoff.pareto_front": [...]}
-report.inputs_summary  # 指標ではない — 入力サイズ: {"architecture.n_examples": 10000, ...}
+report.metrics  # スカラー指標: {"accuracy": ..., "test_regret": ..., "hypervolume_2d": ...}
+report.curves  # 曲線指標: {"pareto_front": [...]}
+report.inputs_summary  # 指標ではない — 入力サイズ: {"n_examples": 10000, ...}
 report.skipped  # 計算できなかった指標 — 機械可読なコード + 理由
-report.omitted_optional_inputs  # 例: ["architecture.random_architecture_accuracies"]
+report.omitted_optional_inputs  # 例: ["random_architecture_accuracies", "reference_front"]
 report.provenance  # 導出されたタスク署名、依存パッケージの版、入力の SHA-256
 ```
 
@@ -109,7 +105,7 @@ airas-eval compare nas_post_training --a inputs_A.json --b inputs_B.json
 `random_architecture_accuracies`, `oracle_test_best`, ...)は任意の参照データで、
 省略するとそれを必要とする指標は skipped として報告され、省略自体も記録される。
 
-入力は常にグループ化されている(`{"architecture": {...}}`)。呼び出し側が選べるのは
+入力は 1 タスク 1 ファイル(フラットな JSON オブジェクト)。呼び出し側が選べるのは
 タスクタイプだけで、研究をどのタスクタイプで評価するかは研究計画側が決める
 (評価ステップではない)。NAS では、探索ステージの後に `nas_pre_training`、
 最終アーキテクチャの学習後に `nas_post_training` を呼ぶ、というパイプラインの段階が
@@ -139,8 +135,8 @@ airas-eval compare nas_post_training --a inputs_A.json --b inputs_B.json
 ## インストール
 
 ```bash
-uv add "airas-eval==0.6.0"     # ライブラリ/CLI として
-uvx airas-eval@0.6.0 list      # インストールせずに CLI だけ使う
+uv add "airas-eval==0.7.0"     # ライブラリ/CLI として
+uvx airas-eval@0.7.0 list      # インストールせずに CLI だけ使う
 ```
 
 評価層が研究の途中で変わらないように、必ずバージョンを固定する。依存: numpy,
@@ -156,7 +152,7 @@ agent の実験コードは **airas_eval を import しない**。agent の成�
 ```toml
 # pyproject.toml — 依存として固定するが、実験コードからは import しない
 [dependency-groups]
-eval = ["airas-eval==0.6.0"]
+eval = ["airas-eval==0.7.0"]
 ```
 
 ```makefile
@@ -193,7 +189,7 @@ report の `inputs_sha256` と入力ファイルの hash、`provenance.versions`
 ```bash
 uv version --bump minor          # 版は pyproject.toml のみ(__version__ はメタデータから読む)
 uv lock && uv run pytest -q
-git commit -am "release: v0.6.0" && git tag v0.6.0 && git push --tags
+git commit -am "release: v0.7.0" && git tag v0.7.0 && git push --tags
 ```
 
 タグの push で `Publish` ワークフローが起動し、HEAD にその版のタグが付いていることを
@@ -212,7 +208,7 @@ uv run pytest
 タスクタイプの追加 = `tasks/<area>/` に既存バンドルから `TASK` を定義するモジュールを
 1 つ置き、エリアの `TASKS` に 1 行足し、`python -m airas_eval.tasks.readme` を実行。
 新しいエリア = 新しいサブパッケージ + `tasks.AREAS` に 1 行。バンドルの追加 =
-`tasks/_inputs.py` の入力モデルと `tasks/_bundles.py` の `Bundle`(`summary` の件数
+`tasks/generic/_inputs.py` の入力モデルと `tasks/_bundles.py` の `Bundle`(`summary` の件数
 付き)。各バインディングには日本語の `description` が必須(テストで強制)。タスクは
 5〜10 指標程度に保つ: 標準的な variant のみ、パラメータごとに 1 つの固定値。
 

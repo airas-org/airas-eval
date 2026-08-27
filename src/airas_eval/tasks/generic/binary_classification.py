@@ -1,10 +1,9 @@
-"""Generic task: binary classification with positive-class scores."""
+"""Generic task: the full binary_classification metric set over its own inputs."""
 
-from airas_eval.spec import Group, TaskSpec
-from airas_eval.tasks import _bundles
+from airas_eval.spec import TaskSpec
+from airas_eval.tasks.generic import _metric_sets
+from airas_eval.tasks.generic._inputs import ClassificationInputs
 
-TASK = TaskSpec(
-    task_type="binary_classification",
-    description=__doc__ or "",
-    groups=(Group("binary_classification", _bundles.BINARY_CLASSIFICATION),),
+TASK = TaskSpec.from_sets(
+    "binary_classification", ClassificationInputs, _metric_sets.BINARY_CLASSIFICATION
 )

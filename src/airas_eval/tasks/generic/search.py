@@ -1,9 +1,7 @@
-"""Generic task: the full search bundle as a single required group."""
+"""Generic task: the full search metric set over its own inputs."""
 
-from airas_eval.spec import Group, TaskSpec
-from airas_eval.tasks import _bundles
+from airas_eval.spec import TaskSpec
+from airas_eval.tasks.generic import _metric_sets
+from airas_eval.tasks.generic._inputs import SearchInputs
 
-TASK = TaskSpec(
-    task_type="search",
-    groups=(Group("search", _bundles.SEARCH),),
-)
+TASK = TaskSpec.from_sets("search", SearchInputs, _metric_sets.SEARCH)

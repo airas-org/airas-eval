@@ -1,6 +1,6 @@
 """登録済みタスクから、エリアごとの README を生成する。
 
-タスクやバンドルを変更したら ``python -m airas_eval.tasks.readme`` を実行する。
+タスクや指標セットを変更したら ``python -m airas_eval.tasks.readme`` を実行する。
 ``tests/test_tasks_readme.py`` は README が古いと失敗する。署名と同じ理由で、
 README は手書きせず必ず宣言から導出する。
 """
@@ -18,38 +18,29 @@ def render_task(task: TaskSpec) -> str:
     if task.description:
         lines += [unwrap_text(task.description), ""]
     if task.notes:
-        lines += [task.notes, ""]
-    for group in task.groups:
-        bundle = group.bundle
-        kind = "必須" if group.required else "任意"
-        lines += [f"**グループ `{group.name}`**({kind})", ""]
-        req = ", ".join(f"`{n}`" for n in bundle.required_inputs()) or "—"
-        opt = ", ".join(f"`{n}`" for n in bundle.optional_inputs()) or "—"
-        lines += [f"- 必須入力: {req}", f"- 任意入力: {opt}", ""]
-        if bundle.notes:
-            lines += [f"規約: {bundle.notes}。", ""]
-        lines += ["| 指標 | 説明 | 実装 | 固定パラメータ |", "|---|---|---|---|"]
-        for kind, bindings in (("", bundle.metrics), ("(曲線)", bundle.curves)):
-            for b in bindings:
-                pinned = ", ".join(f"{k}={v!r}" for k, v in sorted(b.kwargs.items()))
-                lines.append(
-                    f"| `{group.name}.{b.name}`{kind} | {b.description} | "
-                    f"`{b.fn.__module__}.{b.fn.__qualname__}` | {pinned or '—'} |"
-                )
+        lines += [f"規約: {task.notes}。", ""]
+    lines += ["| 入力 | 説明 |", "|---|---|"]
+    for i in task.input_fields():
+        marker = "" if i["required"] else "?"
+        lines.append(f"| `{i['name']}{marker}: {i['type']}` | {i['description']} |")
+    lines.append("")
+    lines += ["| 指標 | 説明 | 実装 | 固定パラメータ |", "|---|---|---|---|"]
+    for kind, bindings in (("", task.metrics), ("(曲線)", task.curves)):
+        for b in bindings:
+            pinned = ", ".join(f"{k}={v!r}" for k, v in sorted(b.kwargs.items()))
+            lines.append(
+                f"| `{b.name}`{kind} | {b.description} | "
+                f"`{b.fn.__module__}.{b.fn.__qualname__}` | {pinned or '—'} |"
+            )
+    lines.append("")
+    if task.summary:
+        lines += ["入力サイズ(指標ではない):", ""]
+        lines += [f"- `{b.name}` — {b.description}" for b in task.summary]
         lines.append("")
-        if bundle.summary:
-            lines += ["入力サイズ(指標ではない):", ""]
-            lines += [
-                f"- `{group.name}.{b.name}` — {b.description}" for b in bundle.summary
-            ]
-            lines.append("")
-        if bundle.per_example:
-            lines += ["事例ごとのスコア(`compare` 用、指標ではない):", ""]
-            lines += [
-                f"- `{group.name}.{b.name}` — {b.description}"
-                for b in bundle.per_example
-            ]
-            lines.append("")
+    if task.per_example:
+        lines += ["事例ごとのスコア(`compare` 用、指標ではない):", ""]
+        lines += [f"- `{b.name}` — {b.description}" for b in task.per_example]
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -69,8 +60,8 @@ def render_area(area: str, tasks: tuple[TaskSpec, ...]) -> str:
         "|---|---|---|",
     ]
     for t in tasks:
-        m = sum(len(g.bundle.metrics) + len(g.bundle.curves) for g in t.groups)
-        c = sum(len(g.bundle.curves) for g in t.groups)
+        m = len(t.metrics) + len(t.curves)
+        c = len(t.curves)
         head.append(
             f"| [`{t.task_type}`](#{t.task_type.replace('_', '')}) | {m} | {c} |"
         )

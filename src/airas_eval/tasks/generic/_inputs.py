@@ -1,7 +1,7 @@
-"""Typed input contracts, one pydantic model per bundle.
+"""Typed input contracts for the generic tasks, one pydantic model each.
 
 These models are the single source of input validation for both the Python
-API and the ``airas-eval score`` JSON boundary (one group each). Everything is
+API and the ``airas-eval score`` JSON boundary. Everything is
 JSON-representable by construction: numpy arrays are coerced to lists,
 unknown keys are rejected, and non-finite values are rejected wherever a
 finite number is expected.
@@ -13,7 +13,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class GroupInputs(BaseModel):
+class TaskInputs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("*", mode="before")
@@ -32,7 +32,7 @@ def _check_finite(values: Any, name: str) -> None:
         raise ValueError(f"{name} must contain only finite numbers")
 
 
-class ClassificationInputs(GroupInputs):
+class ClassificationInputs(TaskInputs):
     """Labels are integer-coded classes; probabilities are (n, n_classes)."""
 
     predicted_labels: list[int] = Field(
@@ -55,7 +55,7 @@ class ClassificationInputs(GroupInputs):
         return value
 
 
-class SearchInputs(GroupInputs):
+class SearchInputs(TaskInputs):
     """Scores of evaluated candidates in evaluation order (higher=better).
 
     ``oracle_best`` is the published optimum of the benchmark being searched,
@@ -81,7 +81,7 @@ class SearchInputs(GroupInputs):
         return value
 
 
-class CandidateRankingInputs(GroupInputs):
+class CandidateRankingInputs(TaskInputs):
     """Predicted vs true scores over a fixed candidate set (higher=better)."""
 
     predicted_scores: list[float] = Field(
@@ -98,7 +98,7 @@ class CandidateRankingInputs(GroupInputs):
         return value
 
 
-class MultiobjectiveInputs(GroupInputs):
+class MultiobjectiveInputs(TaskInputs):
     """Objective vectors per candidate, lower-is-better in every objective
     (use error rate, not accuracy, next to parameter count / MACs)."""
 

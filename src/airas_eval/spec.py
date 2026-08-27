@@ -3,22 +3,19 @@
 Two public layers only:
 
 * ``metrics/`` — pure functions, no task knowledge.
-* ``tasks/`` — a task type is the full set of metrics a study of that kind
-  must report, declared as named *input groups*. Each group binds a pydantic
-  input model to metric bindings; a group is either required or optional.
-  ``evaluate("nas_post_training", {"architecture": {...}})``.
+* ``tasks/`` — a task type is one situation ("NAS, before training, look at
+  performance") bound to ONE inputs file and the FULL set of metrics that
+  situation must report. ``evaluate("nas_pre_training", {...})``.
 
-The reusable building block between them is a :class:`Bundle` (e.g. "the
-classification metrics"). Bundles are plain module constants: they are not
-registered and cannot be evaluated on their own, so the only thing a caller
-can choose is the task type — never which part of it to report. An optional
-group that is omitted is surfaced in the report like any omitted optional
-input.
+Internally, tasks are assembled from :class:`MetricSet` constants (e.g. "the
+classification metrics") so the same binding is written once and reused by
+several tasks. Metric sets are not registered, not evaluable and not shown
+to callers — the only thing a caller can choose is the task type.
 
 The task signature is DERIVED from the declaration (never hand-written): a
-hash over the task type, every group's name / requiredness / input fields,
-and every binding's (name, function qualname, inputs, kwargs). Any change to
-what gets computed changes the signature.
+hash over the task type, its input fields, and every binding's (name,
+function qualname, inputs, kwargs). Any change to what gets computed changes
+the signature.
 """
 
 import hashlib
@@ -66,7 +63,7 @@ class MetricBinding:
 
     The function is called as ``fn(*(input values in order), **kwargs)``.
     ``fn`` must be a module-level function (its qualname is hashed into the
-    task signature); lambdas are rejected at bundle construction.
+    task signature); lambdas are rejected at task construction.
     """
 
     name: str
@@ -85,21 +82,15 @@ class MetricBinding:
 
 
 @dataclass(frozen=True)
-class Bundle:
-    """A reusable set of metrics over one input model.
+class MetricSet:
+    """A reusable, internal group of bindings over agreed input field names.
 
     ``metrics`` and ``curves`` are the evaluation results; ``summary`` holds
-    input-size facts (n_examples, ...) that are reported separately from
-    metrics but are part of the contract and the signature all the same.
+    input-size facts (n_examples, ...) reported apart from metrics;
     ``per_example`` bindings return one score per example (higher is better)
     and exist only to feed paired comparisons between two systems.
-
-    Not registered, not evaluable on its own: tasks compose bundles into
-    named groups. Validation of the declaration happens here so a broken
-    bundle fails at import time.
     """
 
-    input_model: type[BaseModel]
     metrics: tuple[MetricBinding, ...]
     curves: tuple[MetricBinding, ...] = ()
     summary: tuple[MetricBinding, ...] = ()
@@ -107,12 +98,73 @@ class Bundle:
     provenance_packages: tuple[str, ...] = ("numpy",)
     notes: str = ""
 
+
+def _compact_type(schema: dict[str, Any]) -> str:
+    """Render a JSON Schema fragment as a short type, e.g. ``number[][]``."""
+    if "anyOf" in schema:
+        options = [o for o in schema["anyOf"] if o.get("type") != "null"]
+        return " | ".join(_compact_type(o) for o in options)
+    kind = schema.get("type")
+    if kind == "array":
+        return _compact_type(schema.get("items", {})) + "[]"
+    if kind == "integer":
+        return "int"
+    return str(kind or "any")
+
+
+@dataclass(frozen=True)
+class TaskSpec:
+    """The full metric contract for one task type: one inputs file, all the
+    metrics that situation must report. Report keys are the metric names."""
+
+    task_type: str
+    input_model: type[BaseModel]
+    metrics: tuple[MetricBinding, ...]
+    curves: tuple[MetricBinding, ...] = ()
+    summary: tuple[MetricBinding, ...] = ()
+    per_example: tuple[MetricBinding, ...] = ()
+    provenance_packages: tuple[str, ...] = ("numpy",)
+    description: str = ""
+    notes: str = ""
+    schema_version: int = 1
+
+    @classmethod
+    def from_sets(
+        cls,
+        task_type: str,
+        input_model: type[BaseModel],
+        *sets: MetricSet,
+        description: str = "",
+        notes: str = "",
+    ) -> "TaskSpec":
+        """Assemble a task from reusable metric sets (concatenated in order)."""
+        if not sets:
+            raise ValueError(f"task {task_type!r} needs at least one metric set")
+        packages: dict[str, None] = {}
+        for s in sets:
+            for p in s.provenance_packages:
+                packages.setdefault(p, None)
+        set_notes = "。".join(s.notes for s in sets if s.notes)
+        return cls(
+            task_type=task_type,
+            input_model=input_model,
+            metrics=tuple(b for s in sets for b in s.metrics),
+            curves=tuple(b for s in sets for b in s.curves),
+            summary=tuple(b for s in sets for b in s.summary),
+            per_example=tuple(b for s in sets for b in s.per_example),
+            provenance_packages=tuple(packages),
+            description=description,
+            notes="。".join(n for n in (set_notes, notes) if n),
+        )
+
     def __post_init__(self) -> None:
+        if not self.task_type.isidentifier():
+            raise ValueError(f"task type {self.task_type!r} must be an identifier")
+        if not self.metrics:
+            raise ValueError(f"task {self.task_type!r} declares no metrics")
         names = [b.name for b in self.bindings]
         if len(names) != len(set(names)):
-            raise ValueError(
-                f"duplicate metric names in bundle over {self.input_model.__name__}"
-            )
+            raise ValueError(f"duplicate metric names in task {self.task_type!r}")
         model_fields = set(self.input_model.model_fields)
         for binding in self.bindings:
             if not binding.description.strip():
@@ -125,8 +177,8 @@ class Bundle:
             unknown = set(binding.inputs) - model_fields
             if unknown:
                 raise ValueError(
-                    f"{binding.name} requires inputs {sorted(unknown)} not present "
-                    f"in {self.input_model.__name__}"
+                    f"{self.task_type}/{binding.name} requires inputs "
+                    f"{sorted(unknown)} not present in {self.input_model.__name__}"
                 )
 
     @property
@@ -162,103 +214,18 @@ class Bundle:
             for name, f in self.input_model.model_fields.items()
         ]
 
-    def declaration(self) -> dict[str, Any]:
-        return {
-            "required_inputs": list(self.required_inputs()),
-            "optional_inputs": list(self.optional_inputs()),
-            "metrics": [b.declaration() for b in self.metrics],
-            "curves": [b.declaration() for b in self.curves],
-            "summary": [b.declaration() for b in self.summary],
-            "per_example": [b.declaration() for b in self.per_example],
-        }
-
-
-def _compact_type(schema: dict[str, Any]) -> str:
-    """Render a JSON Schema fragment as a short type, e.g. ``number[][]``."""
-    if "anyOf" in schema:
-        options = [o for o in schema["anyOf"] if o.get("type") != "null"]
-        return " | ".join(_compact_type(o) for o in options)
-    kind = schema.get("type")
-    if kind == "array":
-        return _compact_type(schema.get("items", {})) + "[]"
-    if kind == "integer":
-        return "int"
-    return str(kind or "any")
-
-
-@dataclass(frozen=True)
-class Group:
-    """One named input group of a task: a bundle plus whether it is required."""
-
-    name: str
-    bundle: Bundle
-    required: bool = True
-
-    def declaration(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "required": self.required,
-            **self.bundle.declaration(),
-        }
-
-
-@dataclass(frozen=True)
-class TaskSpec:
-    """The full metric contract for one task type: an ordered set of groups.
-
-    Metric names in the report are ``<group>.<metric>``. A task may declare
-    only optional groups; the evaluator then requires at least one of them.
-    """
-
-    task_type: str
-    groups: tuple[Group, ...]
-    description: str = ""
-    notes: str = ""
-    schema_version: int = 1
-
-    def __post_init__(self) -> None:
-        if not self.groups:
-            raise ValueError(f"task {self.task_type!r} declares no groups")
-        names = [g.name for g in self.groups]
-        if len(names) != len(set(names)):
-            raise ValueError(f"duplicate group names in task {self.task_type!r}")
-        for name in names:
-            if not name.isidentifier():
-                raise ValueError(f"group name {name!r} must be an identifier")
-
-    def group(self, name: str) -> Group:
-        for g in self.groups:
-            if g.name == name:
-                return g
-        raise KeyError(name)
-
-    def required_groups(self) -> tuple[str, ...]:
-        return tuple(g.name for g in self.groups if g.required)
-
-    def optional_groups(self) -> tuple[str, ...]:
-        return tuple(g.name for g in self.groups if not g.required)
-
-    def provenance_packages(self) -> tuple[str, ...]:
-        seen: dict[str, None] = {}
-        for g in self.groups:
-            for package in g.bundle.provenance_packages:
-                seen.setdefault(package, None)
-        return tuple(seen)
-
     def describe(self) -> dict[str, Any]:
-        """Human/agent-facing description of what this task returns.
+        """Human/agent-facing description of what this task takes and returns.
 
         Unlike ``declaration`` this includes descriptions and notes and is
         not hashed into the signature; it is what ``airas-eval list --json``
         prints.
         """
 
-        def bindings(
-            group: Group, kind: str, items: tuple[MetricBinding, ...]
-        ) -> list[dict[str, Any]]:
+        def rows(kind: str, items: tuple[MetricBinding, ...]) -> list[dict[str, Any]]:
             return [
                 {
-                    "name": f"{group.name}.{b.name}",
+                    "name": b.name,
                     "kind": kind,
                     "description": b.description,
                     "pinned": dict(sorted(b.kwargs.items())),
@@ -271,45 +238,24 @@ class TaskSpec:
             "task_type": self.task_type,
             "signature": self.signature(),
             "description": unwrap_text(self.description),
-            "groups": [
-                {
-                    "name": g.name,
-                    "required": g.required,
-                    "notes": g.bundle.notes,
-                    "required_inputs": list(g.bundle.required_inputs()),
-                    "optional_inputs": list(g.bundle.optional_inputs()),
-                    "inputs": g.bundle.input_fields(),
-                    "metrics": bindings(g, "scalar", g.bundle.metrics)
-                    + bindings(g, "curve", g.bundle.curves),
-                    "inputs_summary": bindings(g, "input_size", g.bundle.summary),
-                    "per_example": bindings(g, "per_example", g.bundle.per_example),
-                }
-                for g in self.groups
-            ],
+            "notes": self.notes,
+            "required_inputs": list(self.required_inputs()),
+            "optional_inputs": list(self.optional_inputs()),
+            "inputs": self.input_fields(),
+            "metrics": rows("scalar", self.metrics) + rows("curve", self.curves),
+            "inputs_summary": rows("input_size", self.summary),
+            "per_example": rows("per_example", self.per_example),
         }
 
     def input_schema(self) -> dict[str, Any]:
-        """JSON Schema of the inputs file: one object per group.
-
-        Generated from the same pydantic models that validate inputs, so the
-        contract an agent reads and the check the evaluator applies cannot
-        diverge. Semantic conventions live in the field descriptions.
-        """
-        properties: dict[str, Any] = {}
-        for group in self.groups:
-            schema = group.bundle.input_model.model_json_schema()
-            schema["description"] = group.bundle.notes
-            properties[group.name] = schema
-        return {
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "title": f"{self.task_type} inputs",
-            "description": unwrap_text(self.description),
-            "type": "object",
-            "properties": properties,
-            "required": list(self.required_groups()),
-            "minProperties": 1,
-            "additionalProperties": False,
-        }
+        """JSON Schema of the inputs file, generated from the same pydantic
+        model that validates inputs, so the contract an agent reads and the
+        check the evaluator applies cannot diverge."""
+        schema = self.input_model.model_json_schema()
+        schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+        schema["title"] = f"{self.task_type} inputs"
+        schema["description"] = unwrap_text(self.description)
+        return schema
 
     def declaration(self) -> dict[str, Any]:
         """Canonical description of what this task computes.
@@ -322,7 +268,12 @@ class TaskSpec:
         return {
             "task_type": self.task_type,
             "schema_version": self.schema_version,
-            "groups": [g.declaration() for g in self.groups],
+            "required_inputs": list(self.required_inputs()),
+            "optional_inputs": list(self.optional_inputs()),
+            "metrics": [b.declaration() for b in self.metrics],
+            "curves": [b.declaration() for b in self.curves],
+            "summary": [b.declaration() for b in self.summary],
+            "per_example": [b.declaration() for b in self.per_example],
         }
 
     def signature(self) -> str:

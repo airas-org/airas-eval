@@ -1,13 +1,11 @@
 """The scoring entry points: ``evaluate``, ``aggregate_reports``, ``compare``.
 
-Computes the full pinned metric set for a task type — there is no parameter
-for choosing metrics, variants, or which part of the task to report. Inputs
-are one dict per named group, e.g. ``{"classification": {...}}``; single-group
-tasks name their group after the task type.
-What cannot be computed is reported under ``skipped`` with a
-machine-readable code, never silently dropped; and ONLY the dedicated skip
-exceptions are converted to skips — a plain ValueError (malformed inputs, a
-bug in a metric) fails the evaluation.
+``evaluate(task_type, inputs)`` computes the full fixed metric set for a task
+type from ONE inputs dict — there is no parameter for choosing metrics,
+variants, or a subset of the task. What cannot be computed is reported under
+``skipped`` with a machine-readable code, never silently dropped; and ONLY
+the dedicated skip exceptions are converted to skips — a plain ValueError
+(malformed inputs, a bug in a metric) fails the evaluation.
 
 Note on trust: this library cannot defend itself inside an agent-controlled
 process (anything can be monkey-patched there). The trustworthy boundary is
@@ -62,11 +60,10 @@ class AggregateReport:
 
 @dataclass
 class ComparisonReport:
-    """Paired comparison of two systems on the same examples, per group."""
+    """Paired comparison of two systems on the same examples."""
 
     task_type: str
     comparisons: dict[str, dict[str, float]]
-    skipped: dict[str, str]
     provenance: dict[str, Any]
 
     def to_json(self, indent: int = 2) -> str:
@@ -108,61 +105,29 @@ def _get_task(task_type: str) -> TaskSpec:
     return TASKS[task_type]
 
 
-def _validate_groups(task: TaskSpec, inputs: dict[str, Any]) -> dict[str, Any]:
-    """Return ``{group: validated dict | None}`` for every declared group.
-
-    Fail-closed on the contract: unknown groups, missing required groups,
-    and any per-group validation error raise ValueError.
-    """
+def _validated(task: TaskSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+    """Validate one inputs dict against the task contract; fail closed."""
     if not isinstance(inputs, dict):
         raise ValueError(
-            f"invalid inputs for task {task.task_type!r}: expected a dict of "
-            f"input groups {[g.name for g in task.groups]}"
+            f"invalid inputs for task {task.task_type!r}: expected an object with "
+            f"fields {list(task.input_model.model_fields)}"
         )
-    declared = {g.name for g in task.groups}
-    unknown = set(inputs) - declared
-    if unknown:
-        raise ValueError(
-            f"invalid inputs for task {task.task_type!r}: unknown group(s) "
-            f"{sorted(unknown)}; declared groups are {sorted(declared)}"
-        )
-    missing = [g.name for g in task.groups if g.required and inputs.get(g.name) is None]
-    if missing:
-        raise ValueError(
-            f"invalid inputs for task {task.task_type!r}: required group(s) "
-            f"{missing} are missing"
-        )
-    if all(inputs.get(g.name) is None for g in task.groups):
-        raise ValueError(
-            f"invalid inputs for task {task.task_type!r}: at least one of the "
-            f"groups {sorted(declared)} must be provided"
-        )
-    data: dict[str, Any] = {}
-    for group in task.groups:
-        raw = inputs.get(group.name)
-        if raw is None:
-            data[group.name] = None
-            continue
-        try:
-            model = group.bundle.input_model.model_validate(raw)
-        except ValidationError as err:
-            raise ValueError(
-                f"invalid inputs for task {task.task_type!r}, group "
-                f"{group.name!r}: {err}"
-            ) from err
-        data[group.name] = model.model_dump()
-    return data
+    try:
+        model = task.input_model.model_validate(inputs)
+    except ValidationError as err:
+        raise ValueError(f"invalid inputs for task {task.task_type!r}: {err}") from err
+    return model.model_dump()
 
 
 def validate_inputs(task_type: str, inputs: dict[str, Any]) -> list[str]:
-    """Check an inputs file against the task contract without scoring.
+    """Check an inputs dict against the task contract without scoring.
 
-    Returns the names of groups that were provided; raises ValueError with
+    Returns the optional inputs that were provided; raises ValueError with
     the same messages ``evaluate`` would.
     """
     task = _get_task(task_type)
-    data = _validate_groups(task, inputs)
-    return [name for name, value in data.items() if value is not None]
+    data = _validated(task, inputs)
+    return [k for k in task.optional_inputs() if data.get(k) is not None]
 
 
 def _run_binding(
@@ -189,74 +154,49 @@ def _run_binding(
 
 
 def evaluate(task_type: str, inputs: dict[str, Any]) -> EvaluationReport:
-    """Compute the full pinned metric set for ``task_type`` on ``inputs``.
+    """Compute the full fixed metric set for ``task_type`` on ``inputs``.
 
-    ``inputs`` maps each of the task's group names to that group's inputs.
-    Fail-closed on the contract: unknown task types, unknown groups or input
-    keys, wrong types, and missing required groups or inputs raise. Metrics
-    that do not apply to the given data are reported under ``skipped`` with
-    a machine-readable code and a reason; an omitted optional group skips
-    all of its metrics with ``missing_optional_input``.
+    Fail-closed on the contract: unknown task types, unknown input keys,
+    wrong types, and missing required inputs raise. Metrics that do not
+    apply to the given data are reported under ``skipped`` with a
+    machine-readable code and a reason; omitted optional inputs are listed.
     """
     task = _get_task(task_type)
-    data = _validate_groups(task, inputs)
+    data = _validated(task, inputs)
 
     metrics: dict[str, float] = {}
     curves: dict[str, list[Any]] = {}
     skipped: dict[str, dict[str, str]] = {}
     inputs_summary: dict[str, float] = {}
-    omitted: list[str] = []
 
-    for group in task.groups:
-        group_data = data[group.name]
-        bundle = group.bundle
-        if group_data is None:
-            omitted.append(group.name)
-            for binding in bundle.bindings:
-                skipped[f"{group.name}.{binding.name}"] = {
-                    "code": SkipCode.MISSING_OPTIONAL_INPUT.value,
-                    "reason": f"optional group {group.name!r} was not provided",
-                }
-            continue
-        omitted.extend(
-            f"{group.name}.{key}"
-            for key in bundle.optional_inputs()
-            if group_data.get(key) is None
-        )
-
-        for target, bindings in (
-            (metrics, bundle.metrics),
-            (inputs_summary, bundle.summary),
-        ):
-            for binding in bindings:
-                full_name = f"{group.name}.{binding.name}"
-                value, skip = _run_binding(binding, group_data)
-                if skip is not None:
-                    skipped[full_name] = skip
-                    continue
-                score = float(value)
-                if not np.isfinite(score):
-                    skipped[full_name] = {
-                        "code": SkipCode.UNDEFINED_ON_DATA.value,
-                        "reason": f"non-finite result ({score})",
-                    }
-                    continue
-                target[full_name] = score
-
-        for binding in bundle.curves:
-            full_name = f"{group.name}.{binding.name}"
-            value, skip = _run_binding(binding, group_data)
+    for target, bindings in ((metrics, task.metrics), (inputs_summary, task.summary)):
+        for binding in bindings:
+            value, skip = _run_binding(binding, data)
             if skip is not None:
-                skipped[full_name] = skip
+                skipped[binding.name] = skip
                 continue
-            curve = np.asarray(value, dtype=float)
-            if not np.all(np.isfinite(curve)):
-                skipped[full_name] = {
+            score = float(value)
+            if not np.isfinite(score):
+                skipped[binding.name] = {
                     "code": SkipCode.UNDEFINED_ON_DATA.value,
-                    "reason": "non-finite values in curve",
+                    "reason": f"non-finite result ({score})",
                 }
                 continue
-            curves[full_name] = curve.tolist()
+            target[binding.name] = score
+
+    for binding in task.curves:
+        value, skip = _run_binding(binding, data)
+        if skip is not None:
+            skipped[binding.name] = skip
+            continue
+        curve = np.asarray(value, dtype=float)
+        if not np.all(np.isfinite(curve)):
+            skipped[binding.name] = {
+                "code": SkipCode.UNDEFINED_ON_DATA.value,
+                "reason": "non-finite values in curve",
+            }
+            continue
+        curves[binding.name] = curve.tolist()
 
     return EvaluationReport(
         task_type=task_type,
@@ -264,10 +204,12 @@ def evaluate(task_type: str, inputs: dict[str, Any]) -> EvaluationReport:
         curves=curves,
         skipped=skipped,
         inputs_summary=inputs_summary,
-        omitted_optional_inputs=omitted,
+        omitted_optional_inputs=[
+            k for k in task.optional_inputs() if data.get(k) is None
+        ],
         provenance={
             "task_signature": task.signature(),
-            "versions": _versions(task.provenance_packages()),
+            "versions": _versions(task.provenance_packages),
             "inputs_sha256": _inputs_sha256(data),
         },
     )
@@ -325,66 +267,58 @@ def compare(
 ) -> ComparisonReport:
     """Paired significance test between two systems on the same examples.
 
-    For every group that declares per-example scores and is present on both
-    sides: requires identical reference data (same reference fields), then
-    reports mean scores, the mean paired difference (a - b) and a two-sided
-    sign-flip permutation p-value. Provided so research agents never have to
-    implement their own significance testing.
+    Uses the task's per-example scores (first bound input = the prediction,
+    the rest = reference data that must be identical on both sides) and a
+    two-sided sign-flip permutation test. Provided so research agents never
+    have to implement their own significance testing.
     """
     task = _get_task(task_type)
-    data_a = _validate_groups(task, inputs_a)
-    data_b = _validate_groups(task, inputs_b)
+    if not task.per_example:
+        raise ValueError(
+            f"task type {task_type!r} declares no per-example score; paired "
+            "comparison is not available for it"
+        )
+    data_a = _validated(task, inputs_a)
+    data_b = _validated(task, inputs_b)
     comparisons: dict[str, dict[str, float]] = {}
-    skipped: dict[str, str] = {}
 
-    for group in task.groups:
-        bundle = group.bundle
-        if not bundle.per_example:
-            skipped[group.name] = "group declares no per-example score"
-            continue
-        ga, gb = data_a[group.name], data_b[group.name]
-        if ga is None or gb is None:
-            skipped[group.name] = "group not provided on both sides"
-            continue
-        predicted = {b.inputs[0] for b in bundle.per_example}
-        reference_keys = [k for k in ga if k not in predicted]
+    for binding in task.per_example:
+        reference_keys = binding.inputs[1:]
         if any(
-            _inputs_sha256(ga.get(k)) != _inputs_sha256(gb.get(k))
+            _inputs_sha256(data_a.get(k)) != _inputs_sha256(data_b.get(k))
             for k in reference_keys
         ):
             raise ValueError(
-                f"group {group.name!r}: paired comparison requires identical "
-                f"reference inputs on both sides ({', '.join(reference_keys)})"
+                f"{binding.name}: paired comparison requires identical reference "
+                f"inputs on both sides ({', '.join(reference_keys)})"
             )
-        for binding in bundle.per_example:
-            name = f"{group.name}.{binding.name}"
-            a = np.asarray(
-                binding.fn(*(ga[k] for k in binding.inputs), **binding.kwargs),
-                dtype=float,
+        a = np.asarray(
+            binding.fn(*(data_a[k] for k in binding.inputs), **binding.kwargs),
+            dtype=float,
+        )
+        b = np.asarray(
+            binding.fn(*(data_b[k] for k in binding.inputs), **binding.kwargs),
+            dtype=float,
+        )
+        if a.shape != b.shape:
+            raise ValueError(
+                f"{binding.name}: per-example score shapes differ: "
+                f"{a.shape} vs {b.shape}"
             )
-            b = np.asarray(
-                binding.fn(*(gb[k] for k in binding.inputs), **binding.kwargs),
-                dtype=float,
-            )
-            if a.shape != b.shape:
-                raise ValueError(
-                    f"{name}: per-example score shapes differ: {a.shape} vs {b.shape}"
-                )
-            comparisons[name] = {
-                "mean_a": float(a.mean()),
-                "mean_b": float(b.mean()),
-                "mean_diff": float((a - b).mean()),
-                "p_value": _stats.paired_permutation_test(a.tolist(), b.tolist()),
-                "n_examples": float(len(a)),
-            }
+        comparisons[binding.name] = {
+            "mean_a": float(a.mean()),
+            "mean_b": float(b.mean()),
+            "mean_diff": float((a - b).mean()),
+            "p_value": _stats.paired_permutation_test(a.tolist(), b.tolist()),
+            "n_examples": float(len(a)),
+        }
 
     return ComparisonReport(
         task_type=task_type,
         comparisons=comparisons,
-        skipped=skipped,
         provenance={
             "task_signature": task.signature(),
-            "versions": _versions(task.provenance_packages()),
+            "versions": _versions(task.provenance_packages),
             "inputs_a_sha256": _inputs_sha256(data_a),
             "inputs_b_sha256": _inputs_sha256(data_b),
             "test": "two-sided paired sign-flip permutation, 10000 resamples, seed 0",

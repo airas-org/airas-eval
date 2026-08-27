@@ -56,6 +56,12 @@ def _short(text: str, limit: int = 45) -> str:
     return out
 
 
+def _field_signature(field: dict[str, Any]) -> str:
+    """``name: type`` for required inputs, ``name?: type`` for optional ones."""
+    marker = "" if field["required"] else "?"
+    return f"{field['name']}{marker}: {field['type']}"
+
+
 _KIND_HEADERS = (
     ("metrics", "指標"),
     ("inputs_summary", "入力サイズ(指標ではない)"),
@@ -71,35 +77,27 @@ def _print_list(only: str | None) -> None:
         print(f"{task_type}:  [{info['signature']}]")
         if info["description"]:
             print(f"  {_short(info['description'], 80)}")
-        for group in info["groups"]:
-            kind = "必須" if group["required"] else "任意"
-            prefix = group["name"] + "."
-            print(f"\n  グループ {group['name']}({kind})")
-            print(f"    レポートの指標キーは {prefix}<名前>")
-            print("    入力:")
-            width = max(len(f"{i['name']}: {i['type']}") for i in group["inputs"])
-            for i in group["inputs"]:
-                head = f"{i['name']}: {i['type']}"
-                req = "必須" if i["required"] else "任意"
-                print(f"      {head:<{width}}  [{req}] {_short(i['description'], 60)}")
-            rows = group["metrics"] + group["inputs_summary"] + group["per_example"]
-            width = max(len(r["name"]) for r in rows) - len(prefix)
-            for key, header in _KIND_HEADERS:
-                if not group[key]:
-                    continue
-                print(f"    {header}:")
-                for r in group[key]:
-                    name = r["name"].removeprefix(prefix)
-                    tag = "  (曲線)" if r["kind"] == "curve" else ""
-                    pinned = (
-                        "  ["
-                        + ", ".join(f"{k}={v}" for k, v in r["pinned"].items())
-                        + "]"
-                        if r["pinned"]
-                        else ""
-                    )
-                    desc = _short(r["description"])
-                    print(f"      {name:<{width}}  {desc}{pinned}{tag}")
+        print("  入力:")
+        heads = [_field_signature(i) for i in info["inputs"]]
+        width = max(len(h) for h in heads)
+        for head, i in zip(heads, info["inputs"], strict=True):
+            print(f"    {head:<{width}}  {_short(i['description'], 60)}")
+        rows = info["metrics"] + info["inputs_summary"] + info["per_example"]
+        width = max(len(r["name"]) for r in rows)
+        for key, header in _KIND_HEADERS:
+            if not info[key]:
+                continue
+            print(f"  {header}:")
+            for r in info[key]:
+                tag = "  (曲線)" if r["kind"] == "curve" else ""
+                pinned = (
+                    "  [" + ", ".join(f"{k}={v}" for k, v in r["pinned"].items()) + "]"
+                    if r["pinned"]
+                    else ""
+                )
+                print(
+                    f"    {r['name']:<{width}}  {_short(r['description'])}{pinned}{tag}"
+                )
         print()
 
 
@@ -122,13 +120,15 @@ def main() -> None:
         "validate", help="check an inputs file, without scoring"
     )
     p_validate.add_argument("task_type", choices=sorted(TASKS))
-    p_validate.add_argument("--inputs", required=True, help="path to {group: inputs}")
+    p_validate.add_argument(
+        "--inputs", required=True, help="path to the inputs JSON file"
+    )
 
     p_score = sub.add_parser(
         "score", help="compute the full metric set for a task type"
     )
     p_score.add_argument("task_type", choices=sorted(TASKS))
-    p_score.add_argument("--inputs", required=True, help="path to {group: inputs}")
+    p_score.add_argument("--inputs", required=True, help="path to the inputs JSON file")
     p_score.add_argument(
         "--output", help="write the report JSON here (default: stdout)"
     )
@@ -164,12 +164,13 @@ def main() -> None:
         _emit(json.dumps(schema, indent=2, ensure_ascii=False) + "\n", args.output)
     elif args.command == "validate":
         try:
-            groups = validate_inputs(args.task_type, _load(args.inputs))
+            provided = validate_inputs(args.task_type, _load(args.inputs))
         except ValueError as err:
             sys.stderr.write(f"INVALID: {err}\n")
             sys.exit(1)
         print(
-            f"OK: {args.task_type} inputs valid; groups provided: {', '.join(groups)}"
+            f"OK: {args.task_type} inputs valid; optional inputs provided: "
+            f"{', '.join(provided) or 'none'}"
         )
     elif args.command == "score":
         report = evaluate(args.task_type, _load(args.inputs))

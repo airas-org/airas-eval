@@ -4,8 +4,8 @@ One sub-package per area: ``generic`` (evaluation families with no research
 assumptions) and one per research area (``nas``, ...). Each sub-package has a
 generated README listing exactly which metrics every task returns
 (``python -m airas_eval.tasks.readme``), and ``airas-eval list`` prints the
-same from the live registry. Only task types are registered — the bundles in
-``_bundles`` are not.
+same from the live registry. Only task types are registered — the metric
+sets in ``_metric_sets`` are not.
 
 The list is deliberately explicit (no entry points, no package scanning):
 in a trust layer, what gets computed must be visible in a reviewed diff,
