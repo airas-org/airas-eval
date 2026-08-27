@@ -21,9 +21,8 @@ def render_task(task: TaskSpec) -> str:
         lines += [task.notes, ""]
     for group in task.groups:
         bundle = group.bundle
-        if len(task.groups) > 1 or group.name != "main":
-            kind = "必須" if group.required else "任意"
-            lines += [f"**グループ `{group.name}`**({kind})", ""]
+        kind = "必須" if group.required else "任意"
+        lines += [f"**グループ `{group.name}`**({kind})", ""]
         req = ", ".join(f"`{n}`" for n in bundle.required_inputs()) or "—"
         opt = ", ".join(f"`{n}`" for n in bundle.optional_inputs()) or "—"
         lines += [f"- 必須入力: {req}", f"- 任意入力: {opt}", ""]

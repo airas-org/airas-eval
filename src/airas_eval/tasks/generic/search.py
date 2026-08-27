@@ -5,5 +5,5 @@ from airas_eval.tasks import _bundles
 
 TASK = TaskSpec(
     task_type="search",
-    groups=(Group("main", _bundles.SEARCH),),
+    groups=(Group("search", _bundles.SEARCH),),
 )

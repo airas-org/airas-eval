@@ -2,7 +2,8 @@
 
 Computes the full pinned metric set for a task type — there is no parameter
 for choosing metrics, variants, or which part of the task to report. Inputs
-are one dict per named group: ``{"main": {...}}``.
+are one dict per named group, e.g. ``{"classification": {...}}``; single-group
+tasks name their group after the task type.
 What cannot be computed is reported under ``skipped`` with a
 machine-readable code, never silently dropped; and ONLY the dedicated skip
 exceptions are converted to skips — a plain ValueError (malformed inputs, a

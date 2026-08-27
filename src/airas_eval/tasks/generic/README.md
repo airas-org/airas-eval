@@ -18,7 +18,9 @@
 
 ### `classification`
 
-署名: `classification/v1@f04c21b39c2f`
+署名: `classification/v1@1d462eac2c39`
+
+**グループ `classification`**(必須)
 
 - 必須入力: `predicted_labels`, `reference_labels`
 - 任意入力: `probabilities`
@@ -27,30 +29,32 @@
 
 | 指標 | 説明 | 実装 | 固定パラメータ |
 |---|---|---|---|
-| `main.accuracy` | 正解率。予測ラベルが正解ラベルと一致した割合。 | `airas_eval.metrics.classification.accuracy` | — |
-| `main.precision_macro` | 適合率(マクロ平均)。クラスごとの適合率を単純平均した値で、少数クラスも等しく重み付けされる。 | `airas_eval.metrics.classification.precision` | average='macro' |
-| `main.recall_macro` | 再現率(マクロ平均)。クラスごとの再現率を単純平均した値。 | `airas_eval.metrics.classification.recall` | average='macro' |
-| `main.f1_macro` | F1 スコア(マクロ平均)。クラスごとの適合率と再現率の調和平均を単純平均した値。 | `airas_eval.metrics.classification.f1` | average='macro' |
-| `main.balanced_accuracy` | 均衡正解率。クラスごとの再現率の平均で、クラス不均衡の影響を受けない正解率。 | `airas_eval.metrics.classification.balanced_accuracy` | — |
-| `main.matthews_corrcoef` | Matthews 相関係数(MCC)。混同行列全体を使う相関係数で、不均衡データでも偶然の一致に惑わされにくい(−1〜1)。 | `airas_eval.metrics.classification.matthews_corrcoef` | — |
-| `main.log_loss` | 対数損失(交差エントロピー)。正解クラスに割り当てた確率の負の対数の平均。確率の質を測り、低いほど良い。 | `airas_eval.metrics.classification.log_loss` | — |
-| `main.expected_calibration_error` | 期待較正誤差(ECE)。予測確信度をビン分けし、各ビンで確信度と実際の正解率のずれを重み付き平均したもの。低いほど確率が較正されている。 | `airas_eval.metrics.classification.expected_calibration_error` | n_bins=15 |
-| `main.top_5_accuracy` | Top-5 正解率。確率上位 5 クラスの中に正解が含まれる割合(ImageNet 系の標準指標)。 | `airas_eval.tasks._bundles.top_5_accuracy` | — |
+| `classification.accuracy` | 正解率。予測ラベルが正解ラベルと一致した割合。 | `airas_eval.metrics.classification.accuracy` | — |
+| `classification.precision_macro` | 適合率(マクロ平均)。クラスごとの適合率を単純平均した値で、少数クラスも等しく重み付けされる。 | `airas_eval.metrics.classification.precision` | average='macro' |
+| `classification.recall_macro` | 再現率(マクロ平均)。クラスごとの再現率を単純平均した値。 | `airas_eval.metrics.classification.recall` | average='macro' |
+| `classification.f1_macro` | F1 スコア(マクロ平均)。クラスごとの適合率と再現率の調和平均を単純平均した値。 | `airas_eval.metrics.classification.f1` | average='macro' |
+| `classification.balanced_accuracy` | 均衡正解率。クラスごとの再現率の平均で、クラス不均衡の影響を受けない正解率。 | `airas_eval.metrics.classification.balanced_accuracy` | — |
+| `classification.matthews_corrcoef` | Matthews 相関係数(MCC)。混同行列全体を使う相関係数で、不均衡データでも偶然の一致に惑わされにくい(−1〜1)。 | `airas_eval.metrics.classification.matthews_corrcoef` | — |
+| `classification.log_loss` | 対数損失(交差エントロピー)。正解クラスに割り当てた確率の負の対数の平均。確率の質を測り、低いほど良い。 | `airas_eval.metrics.classification.log_loss` | — |
+| `classification.expected_calibration_error` | 期待較正誤差(ECE)。予測確信度をビン分けし、各ビンで確信度と実際の正解率のずれを重み付き平均したもの。低いほど確率が較正されている。 | `airas_eval.metrics.classification.expected_calibration_error` | n_bins=15 |
+| `classification.top_5_accuracy` | Top-5 正解率。確率上位 5 クラスの中に正解が含まれる割合(ImageNet 系の標準指標)。 | `airas_eval.tasks._bundles.top_5_accuracy` | — |
 
 入力サイズ(指標ではない):
 
-- `main.n_examples` — 評価に使われた事例数。
-- `main.n_classes` — 確率行列の列数(クラス数)。
+- `classification.n_examples` — 評価に使われた事例数。
+- `classification.n_classes` — 確率行列の列数(クラス数)。
 
 事例ごとのスコア(`compare` 用、指標ではない):
 
-- `main.correct` — 事例ごとの正誤(1/0)。2 システムのペア比較(compare)に使う。
+- `classification.correct` — 事例ごとの正誤(1/0)。2 システムのペア比較(compare)に使う。
 
 ### `binary_classification`
 
-署名: `binary_classification/v1@c71bf7c134a8`
+署名: `binary_classification/v1@17378c806110`
 
 Generic task: binary classification with positive-class scores.
+
+**グループ `binary_classification`**(必須)
 
 - 必須入力: `predicted_labels`, `reference_labels`
 - 任意入力: `probabilities`
@@ -59,29 +63,31 @@ Generic task: binary classification with positive-class scores.
 
 | 指標 | 説明 | 実装 | 固定パラメータ |
 |---|---|---|---|
-| `main.accuracy` | 正解率。予測ラベルが正解ラベルと一致した割合。 | `airas_eval.metrics.classification.accuracy` | — |
-| `main.precision` | 適合率(正例クラス)。正例と予測したもののうち実際に正例だった割合。 | `airas_eval.metrics.classification.precision` | average='binary' |
-| `main.recall` | 再現率(正例クラス)。実際の正例のうち正例と予測できた割合。 | `airas_eval.metrics.classification.recall` | average='binary' |
-| `main.f1` | F1 スコア(正例クラス)。適合率と再現率の調和平均。 | `airas_eval.metrics.classification.f1` | average='binary' |
-| `main.balanced_accuracy` | 均衡正解率。クラスごとの再現率の平均で、クラス不均衡の影響を受けない正解率。 | `airas_eval.metrics.classification.balanced_accuracy` | — |
-| `main.matthews_corrcoef` | Matthews 相関係数(MCC)。混同行列全体を使う相関係数で、不均衡データでも偶然の一致に惑わされにくい(−1〜1)。 | `airas_eval.metrics.classification.matthews_corrcoef` | — |
-| `main.auroc` | ROC 曲線下面積(AUROC)。正例と負例をランダムに選んだとき正例のスコアが高い確率。閾値に依存しない判別力(0.5 が偶然)。 | `airas_eval.tasks._bundles.auroc_binary` | — |
-| `main.average_precision` | 平均適合率(AP)。適合率–再現率曲線下の面積で、不均衡な正例検出の性能を測る。 | `airas_eval.tasks._bundles.average_precision_binary` | — |
-| `main.log_loss` | 対数損失(交差エントロピー)。正解クラスに割り当てた確率の負の対数の平均。確率の質を測り、低いほど良い。 | `airas_eval.metrics.classification.log_loss` | — |
-| `main.brier_score` | Brier スコア。正例確率と正解(0/1)の二乗誤差の平均。確率予測の精度と較正を同時に測り、低いほど良い。 | `airas_eval.tasks._bundles.brier_score_binary` | — |
-| `main.expected_calibration_error` | 期待較正誤差(ECE)。予測確信度をビン分けし、各ビンで確信度と実際の正解率のずれを重み付き平均したもの。低いほど確率が較正されている。 | `airas_eval.metrics.classification.expected_calibration_error` | n_bins=15 |
+| `binary_classification.accuracy` | 正解率。予測ラベルが正解ラベルと一致した割合。 | `airas_eval.metrics.classification.accuracy` | — |
+| `binary_classification.precision` | 適合率(正例クラス)。正例と予測したもののうち実際に正例だった割合。 | `airas_eval.metrics.classification.precision` | average='binary' |
+| `binary_classification.recall` | 再現率(正例クラス)。実際の正例のうち正例と予測できた割合。 | `airas_eval.metrics.classification.recall` | average='binary' |
+| `binary_classification.f1` | F1 スコア(正例クラス)。適合率と再現率の調和平均。 | `airas_eval.metrics.classification.f1` | average='binary' |
+| `binary_classification.balanced_accuracy` | 均衡正解率。クラスごとの再現率の平均で、クラス不均衡の影響を受けない正解率。 | `airas_eval.metrics.classification.balanced_accuracy` | — |
+| `binary_classification.matthews_corrcoef` | Matthews 相関係数(MCC)。混同行列全体を使う相関係数で、不均衡データでも偶然の一致に惑わされにくい(−1〜1)。 | `airas_eval.metrics.classification.matthews_corrcoef` | — |
+| `binary_classification.auroc` | ROC 曲線下面積(AUROC)。正例と負例をランダムに選んだとき正例のスコアが高い確率。閾値に依存しない判別力(0.5 が偶然)。 | `airas_eval.tasks._bundles.auroc_binary` | — |
+| `binary_classification.average_precision` | 平均適合率(AP)。適合率–再現率曲線下の面積で、不均衡な正例検出の性能を測る。 | `airas_eval.tasks._bundles.average_precision_binary` | — |
+| `binary_classification.log_loss` | 対数損失(交差エントロピー)。正解クラスに割り当てた確率の負の対数の平均。確率の質を測り、低いほど良い。 | `airas_eval.metrics.classification.log_loss` | — |
+| `binary_classification.brier_score` | Brier スコア。正例確率と正解(0/1)の二乗誤差の平均。確率予測の精度と較正を同時に測り、低いほど良い。 | `airas_eval.tasks._bundles.brier_score_binary` | — |
+| `binary_classification.expected_calibration_error` | 期待較正誤差(ECE)。予測確信度をビン分けし、各ビンで確信度と実際の正解率のずれを重み付き平均したもの。低いほど確率が較正されている。 | `airas_eval.metrics.classification.expected_calibration_error` | n_bins=15 |
 
 入力サイズ(指標ではない):
 
-- `main.n_examples` — 評価に使われた事例数。
+- `binary_classification.n_examples` — 評価に使われた事例数。
 
 事例ごとのスコア(`compare` 用、指標ではない):
 
-- `main.correct` — 事例ごとの正誤(1/0)。2 システムのペア比較(compare)に使う。
+- `binary_classification.correct` — 事例ごとの正誤(1/0)。2 システムのペア比較(compare)に使う。
 
 ### `search`
 
-署名: `search/v1@2723032a774d`
+署名: `search/v1@dbd62c23e5f6`
+
+**グループ `search`**(必須)
 
 - 必須入力: `evaluated_scores`
 - 任意入力: `oracle_best`
@@ -90,20 +96,22 @@ Generic task: binary classification with positive-class scores.
 
 | 指標 | 説明 | 実装 | 固定パラメータ |
 |---|---|---|---|
-| `main.best_score` | 探索で評価した候補のうち最良のスコア。 | `airas_eval.metrics.search.best_score` | — |
-| `main.final_regret` | 最終リグレット。ベンチマークの既知最適値(oracle_best)と探索で見つけた最良スコアの差。0 が最適解到達。 | `airas_eval.metrics.search.final_regret` | — |
-| `main.mean_anytime_regret` | 平均 anytime リグレット。各評価時点での暫定最良(best-so-far)と最適値の差を全評価にわたって平均したもの。良い候補を早く見つけるほど小さい。 | `airas_eval.metrics.search.mean_anytime_regret` | — |
-| `main.evaluations_to_best` | 最終的な最良スコアに初めて到達した評価回数(1 始まり)。 | `airas_eval.metrics.search.evaluations_to_best` | — |
-| `main.mean_evaluated_score` | 評価した全候補のスコア平均。偶然見つけた最良値ではなく、探索が選んで評価した候補の質を表す。 | `airas_eval.metrics.search.mean_evaluated_score` | — |
-| `main.best_so_far`(曲線) | 評価回数ごとの暫定最良スコアの推移(anytime 曲線)。 | `airas_eval.metrics.search.best_so_far` | — |
+| `search.best_score` | 探索で評価した候補のうち最良のスコア。 | `airas_eval.metrics.search.best_score` | — |
+| `search.final_regret` | 最終リグレット。ベンチマークの既知最適値(oracle_best)と探索で見つけた最良スコアの差。0 が最適解到達。 | `airas_eval.metrics.search.final_regret` | — |
+| `search.mean_anytime_regret` | 平均 anytime リグレット。各評価時点での暫定最良(best-so-far)と最適値の差を全評価にわたって平均したもの。良い候補を早く見つけるほど小さい。 | `airas_eval.metrics.search.mean_anytime_regret` | — |
+| `search.evaluations_to_best` | 最終的な最良スコアに初めて到達した評価回数(1 始まり)。 | `airas_eval.metrics.search.evaluations_to_best` | — |
+| `search.mean_evaluated_score` | 評価した全候補のスコア平均。偶然見つけた最良値ではなく、探索が選んで評価した候補の質を表す。 | `airas_eval.metrics.search.mean_evaluated_score` | — |
+| `search.best_so_far`(曲線) | 評価回数ごとの暫定最良スコアの推移(anytime 曲線)。 | `airas_eval.metrics.search.best_so_far` | — |
 
 入力サイズ(指標ではない):
 
-- `main.n_evaluations` — 探索で評価した候補数(評価予算)。
+- `search.n_evaluations` — 探索で評価した候補数(評価予算)。
 
 ### `candidate_ranking`
 
-署名: `candidate_ranking/v1@28c947b46df7`
+署名: `candidate_ranking/v1@81da4cca65a9`
+
+**グループ `candidate_ranking`**(必須)
 
 - 必須入力: `predicted_scores`, `reference_scores`
 - 任意入力: —
@@ -112,21 +120,23 @@ Generic task: binary classification with positive-class scores.
 
 | 指標 | 説明 | 実装 | 固定パラメータ |
 |---|---|---|---|
-| `main.kendall_tau` | Kendall の τ(tau-b)。予測スコアと真のスコアの順位一致度。全候補ペアのうち順序が一致する割合に基づく(−1〜1)。 | `airas_eval.metrics.regression.kendall_tau` | — |
-| `main.spearman_rho` | Spearman の ρ。予測スコアと真のスコアの順位相関係数(−1〜1)。 | `airas_eval.metrics.regression.spearman_rho` | — |
-| `main.precision_at_top_10pct` | 上位 10% の一致率。予測で上位 10% とされた候補集合と、真の上位 10% の集合の重なりの割合。 | `airas_eval.metrics.selection.precision_at_top_fraction` | fraction=0.1 |
-| `main.selection_regret_at_1` | 選択リグレット@1。予測で 1 位とした候補の真のスコアと、真の最良スコアとの差。予測器を信じて 1 つ選んだときの損失。 | `airas_eval.metrics.selection.selection_regret_at_k` | k=1 |
-| `main.best_true_rank_in_top_10` | 予測上位 10 件の中に含まれる候補の真の順位の最良値(1 始まり)。1 なら真の最良候補が上位 10 件に入っている。 | `airas_eval.metrics.selection.best_true_rank_in_predicted_top_k` | k=10 |
-| `main.selection_regret_curve`(曲線) | k = 1..n の各 k での選択リグレット。固定 k のスカラーを掃引の中で読むための曲線。 | `airas_eval.metrics.selection.selection_regret_curve` | — |
-| `main.precision_at_top_k_curve`(曲線) | k = 1..n の各 k での上位 k 集合の一致率(|予測上位k ∩ 真の上位k| / k)。 | `airas_eval.metrics.selection.precision_at_top_k_curve` | — |
+| `candidate_ranking.kendall_tau` | Kendall の τ(tau-b)。予測スコアと真のスコアの順位一致度。全候補ペアのうち順序が一致する割合に基づく(−1〜1)。 | `airas_eval.metrics.regression.kendall_tau` | — |
+| `candidate_ranking.spearman_rho` | Spearman の ρ。予測スコアと真のスコアの順位相関係数(−1〜1)。 | `airas_eval.metrics.regression.spearman_rho` | — |
+| `candidate_ranking.precision_at_top_10pct` | 上位 10% の一致率。予測で上位 10% とされた候補集合と、真の上位 10% の集合の重なりの割合。 | `airas_eval.metrics.selection.precision_at_top_fraction` | fraction=0.1 |
+| `candidate_ranking.selection_regret_at_1` | 選択リグレット@1。予測で 1 位とした候補の真のスコアと、真の最良スコアとの差。予測器を信じて 1 つ選んだときの損失。 | `airas_eval.metrics.selection.selection_regret_at_k` | k=1 |
+| `candidate_ranking.best_true_rank_in_top_10` | 予測上位 10 件の中に含まれる候補の真の順位の最良値(1 始まり)。1 なら真の最良候補が上位 10 件に入っている。 | `airas_eval.metrics.selection.best_true_rank_in_predicted_top_k` | k=10 |
+| `candidate_ranking.selection_regret_curve`(曲線) | k = 1..n の各 k での選択リグレット。固定 k のスカラーを掃引の中で読むための曲線。 | `airas_eval.metrics.selection.selection_regret_curve` | — |
+| `candidate_ranking.precision_at_top_k_curve`(曲線) | k = 1..n の各 k での上位 k 集合の一致率(|予測上位k ∩ 真の上位k| / k)。 | `airas_eval.metrics.selection.precision_at_top_k_curve` | — |
 
 入力サイズ(指標ではない):
 
-- `main.n_candidates` — 順位付けの対象となった候補数。
+- `candidate_ranking.n_candidates` — 順位付けの対象となった候補数。
 
 ### `multiobjective`
 
-署名: `multiobjective/v1@4a410e435be8`
+署名: `multiobjective/v1@4202ba46c06c`
+
+**グループ `multiobjective`**(必須)
 
 - 必須入力: `points`
 - 任意入力: `reference_point`, `reference_front`
@@ -135,14 +145,14 @@ Generic task: binary classification with positive-class scores.
 
 | 指標 | 説明 | 実装 | 固定パラメータ |
 |---|---|---|---|
-| `main.pareto_front_size` | Pareto フロント(非劣解)上の点の数。 | `airas_eval.tasks._bundles.pareto_front_size` | — |
-| `main.hypervolume_2d` | ハイパーボリューム(2 目的)。Pareto フロントが参照点に対して支配する面積。フロントが良いほど大きい(全目的最小化)。 | `airas_eval.metrics.pareto.hypervolume_2d` | — |
-| `main.igd` | 逆世代距離(IGD)。既知の参照フロントの各点から得られたフロントへの最近距離の平均。参照フロントをどれだけ広く近くカバーしたかを測り、低いほど良い。 | `airas_eval.metrics.pareto.igd` | — |
-| `main.gd` | 世代距離(GD)。得られた各点から参照フロントへの最近距離の平均。収束度を測り、低いほど良い。 | `airas_eval.metrics.pareto.gd` | — |
-| `main.spacing` | Spacing(Schott)。フロント上の点の最近傍距離の標準偏差。0 に近いほど点が均等に分布している。 | `airas_eval.metrics.pareto.spacing` | — |
-| `main.pareto_front`(曲線) | 非劣解の点集合(第 1 目的で昇順)。 | `airas_eval.metrics.pareto.pareto_front` | — |
+| `multiobjective.pareto_front_size` | Pareto フロント(非劣解)上の点の数。 | `airas_eval.tasks._bundles.pareto_front_size` | — |
+| `multiobjective.hypervolume_2d` | ハイパーボリューム(2 目的)。Pareto フロントが参照点に対して支配する面積。フロントが良いほど大きい(全目的最小化)。 | `airas_eval.metrics.pareto.hypervolume_2d` | — |
+| `multiobjective.igd` | 逆世代距離(IGD)。既知の参照フロントの各点から得られたフロントへの最近距離の平均。参照フロントをどれだけ広く近くカバーしたかを測り、低いほど良い。 | `airas_eval.metrics.pareto.igd` | — |
+| `multiobjective.gd` | 世代距離(GD)。得られた各点から参照フロントへの最近距離の平均。収束度を測り、低いほど良い。 | `airas_eval.metrics.pareto.gd` | — |
+| `multiobjective.spacing` | Spacing(Schott)。フロント上の点の最近傍距離の標準偏差。0 に近いほど点が均等に分布している。 | `airas_eval.metrics.pareto.spacing` | — |
+| `multiobjective.pareto_front`(曲線) | 非劣解の点集合(第 1 目的で昇順)。 | `airas_eval.metrics.pareto.pareto_front` | — |
 
 入力サイズ(指標ではない):
 
-- `main.n_points` — 評価対象の候補(目的ベクトル)の数。
-- `main.n_objectives` — 目的関数の数。
+- `multiobjective.n_points` — 評価対象の候補(目的ベクトル)の数。
+- `multiobjective.n_objectives` — 目的関数の数。

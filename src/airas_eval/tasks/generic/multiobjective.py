@@ -5,5 +5,5 @@ from airas_eval.tasks import _bundles
 
 TASK = TaskSpec(
     task_type="multiobjective",
-    groups=(Group("main", _bundles.MULTIOBJECTIVE),),
+    groups=(Group("multiobjective", _bundles.MULTIOBJECTIVE),),
 )

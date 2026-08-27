@@ -5,5 +5,5 @@ from airas_eval.tasks import _bundles
 
 TASK = TaskSpec(
     task_type="candidate_ranking",
-    groups=(Group("main", _bundles.CANDIDATE_RANKING),),
+    groups=(Group("candidate_ranking", _bundles.CANDIDATE_RANKING),),
 )

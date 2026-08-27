@@ -100,7 +100,7 @@ def test_nas_bundles_extend_the_core_bindings_verbatim():
     }
     for (nas_task, group), generic_task in pairs.items():
         nas = TASKS[nas_task].group(group).bundle
-        core = TASKS[generic_task].group("main").bundle
+        core = TASKS[generic_task].group(generic_task).bundle
         assert nas.metrics[: len(core.metrics)] == core.metrics
         assert nas.curves[: len(core.curves)] == core.curves
         assert nas.summary[: len(core.summary)] == core.summary
