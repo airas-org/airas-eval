@@ -1,16 +1,35 @@
 [project]
 name = "airas-eval"
-version = "0.2.0"
-description = "Standard evaluation-metric implementations for AIRAS: a trusted, versioned scoring layer computed from raw predictions"
+version = "0.3.0"
+description = "Trusted evaluation layer for AIRAS: the full fixed set of standard metrics per task type, computed from raw predictions"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10,<3.13"
+authors = [{ name = "airas-org" }]
+keywords = ["evaluation", "metrics", "neural-architecture-search", "reproducibility", "ai-scientist"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
 dependencies = [
     "numpy>=1.26",
     "scikit-learn>=1.5",
     "scipy>=1.11",
     "pydantic>=2.7",
 ]
+
+[project.urls]
+Homepage = "https://github.com/airas-org/airas-eval"
+Repository = "https://github.com/airas-org/airas-eval"
+Issues = "https://github.com/airas-org/airas-eval/issues"
 
 [project.scripts]
 airas-eval = "airas_eval.cli:main"
@@ -35,6 +54,11 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Metric descriptions are Japanese prose; wrapping them hurts more than it helps.
+"src/airas_eval/tasks/_bundles.py" = ["E501"]
+"src/airas_eval/tasks/nas/_bundles.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"

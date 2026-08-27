@@ -30,4 +30,5 @@ jobs:
         run: |
           uv build
           uvx --from dist/*.whl airas-eval list
-          uvx --from dist/*.whl airas-eval score nas_search --inputs examples/nas_search.json
+          uvx --from dist/*.whl airas-eval score nas_pre_training --inputs examples/nas_pre_training.json
+          uvx --from dist/*.whl airas-eval score nas_post_training --inputs examples/nas_post_training.json
