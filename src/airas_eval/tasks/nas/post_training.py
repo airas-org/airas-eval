@@ -1,10 +1,9 @@
-"""NAS・学習後: 探索が選び、学習した最終アーキテクチャの性能。
+"""NAS の学習後評価。探索で選ばれ、実際に学習した最終アーキテクチャの性能を測る。
 
-汎用 ``classification`` の全指標に、Yang et al. (ICLR 2020) が求めるベースライン
-(同じパイプラインで学習したランダムアーキテクチャ群に対する相対精度)と、
-ベンチマークの公表テスト最適値に対するテストリグレットを加え、さらに
-(誤り率, コスト) 点集合が与えられれば汎用 ``multiobjective`` のフロント指標
-(hypervolume, IGD, ...)も返す。"""
+汎用 ``classification`` の全指標に、同じパイプラインで学習したランダムアーキテク
+チャ群を基準にした相対精度(Yang et al., ICLR 2020)と、ベンチマークの公表テスト
+最適値に対するテストリグレットを加えたもの。(誤り率, コスト) の点集合を与えれば、
+汎用 ``multiobjective`` のフロント指標(hypervolume, IGD, ...)も合わせて返す。"""
 
 from airas_eval.spec import TaskSpec
 from airas_eval.tasks.generic import _metric_sets as core

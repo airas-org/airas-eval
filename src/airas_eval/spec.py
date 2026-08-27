@@ -30,13 +30,14 @@ from pydantic import BaseModel
 
 
 def unwrap_text(text: str) -> str:
-    """Join wrapped docstring lines: no space between CJK characters, one
-    space otherwise (so English words at a line break stay separated)."""
+    """Join wrapped docstring lines: no space where a CJK character meets
+    another CJK character, one space everywhere else (so "NAS の" and
+    "Brier スコア" keep their spacing across a line break)."""
     words = text.split()
     out = words[:1]
     for word in words[1:]:
         wide = unicodedata.east_asian_width
-        if wide(out[-1][-1]) in ("W", "F") or wide(word[0]) in ("W", "F"):
+        if wide(out[-1][-1]) in ("W", "F") and wide(word[0]) in ("W", "F"):
             out[-1] += word
         else:
             out.append(word)
@@ -70,7 +71,10 @@ class MetricBinding:
     fn: Callable[..., Any]
     inputs: tuple[str, ...]
     kwargs: dict[str, Any] = field(default_factory=dict)
-    description: str = ""  # human-readable (Japanese); not part of the signature
+    # Documentation, not part of the signature:
+    description: str = ""  # human-readable (Japanese)
+    value_range: str = ""  # e.g. "[0, 1]", "[-1, 1]", "[0, ∞)", "スコアと同じ単位"
+    direction: str = ""  # "higher" | "lower" | "none" (higher/lower is better)
 
     def declaration(self) -> dict[str, Any]:
         return {
@@ -169,6 +173,13 @@ class TaskSpec:
         for binding in self.bindings:
             if not binding.description.strip():
                 raise ValueError(f"{binding.name}: every binding needs a description")
+        for binding in self.metrics + self.curves:
+            if not binding.value_range.strip():
+                raise ValueError(f"{binding.name}: every metric needs a value_range")
+            if binding.direction not in ("higher", "lower", "none"):
+                raise ValueError(
+                    f"{binding.name}: direction must be higher, lower or none"
+                )
             if "<lambda>" in getattr(binding.fn, "__qualname__", "<lambda>"):
                 raise ValueError(
                     f"{binding.name}: bindings must reference named module-level "
@@ -228,6 +239,8 @@ class TaskSpec:
                     "name": b.name,
                     "kind": kind,
                     "description": b.description,
+                    "value_range": b.value_range,
+                    "direction": b.direction,
                     "pinned": dict(sorted(b.kwargs.items())),
                     "inputs": list(b.inputs),
                 }

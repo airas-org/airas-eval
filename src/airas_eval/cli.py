@@ -19,6 +19,7 @@ that.
 import argparse
 import json
 import sys
+import unicodedata
 from typing import Any
 
 from airas_eval import (
@@ -42,6 +43,15 @@ def _emit(payload: str, output: str | None) -> None:
             f.write(payload)
     else:
         sys.stdout.write(payload)
+
+
+def _width(text: str) -> int:
+    """Terminal display width: East Asian wide/fullwidth characters take 2."""
+    return sum(2 if unicodedata.east_asian_width(c) in ("W", "F") else 1 for c in text)
+
+
+def _pad(text: str, width: int) -> str:
+    return text + " " * max(0, width - _width(text))
 
 
 def _short(text: str, limit: int = 45) -> str:
@@ -84,19 +94,29 @@ def _print_list(only: str | None) -> None:
             print(f"    {head:<{width}}  {_short(i['description'], 60)}")
         rows = info["metrics"] + info["inputs_summary"] + info["per_example"]
         width = max(len(r["name"]) for r in rows)
+        arrows = {"higher": "↑", "lower": "↓", "none": "–"}
         for key, header in _KIND_HEADERS:
             if not info[key]:
                 continue
             print(f"  {header}:")
-            for r in info[key]:
+            ranges = [
+                f"{r['value_range']} {arrows[r['direction']]}"
+                if r["value_range"]
+                else ""
+                for r in info[key]
+            ]
+            rwidth = max(_width(x) for x in ranges)
+            for r, rng in zip(info[key], ranges, strict=True):
                 tag = "  (曲線)" if r["kind"] == "curve" else ""
                 pinned = (
                     "  [" + ", ".join(f"{k}={v}" for k, v in r["pinned"].items()) + "]"
                     if r["pinned"]
                     else ""
                 )
+                range_col = f"  {_pad(rng, rwidth)}" if rwidth else ""
                 print(
-                    f"    {r['name']:<{width}}  {_short(r['description'])}{pinned}{tag}"
+                    f"    {r['name']:<{width}}{range_col}  "
+                    f"{_short(r['description'])}{pinned}{tag}"
                 )
         print()
 

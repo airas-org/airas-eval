@@ -24,13 +24,18 @@ def render_task(task: TaskSpec) -> str:
         marker = "" if i["required"] else "?"
         lines.append(f"| `{i['name']}{marker}: {i['type']}` | {i['description']} |")
     lines.append("")
-    lines += ["| 指標 | 説明 | 実装 | 固定パラメータ |", "|---|---|---|---|"]
+    lines += [
+        "| 指標 | 値域 | 良い方向 | 説明 | 実装 | 固定パラメータ |",
+        "|---|---|---|---|---|---|",
+    ]
+    arrows = {"higher": "高いほど良い", "lower": "低いほど良い", "none": "—"}
     for kind, bindings in (("", task.metrics), ("(曲線)", task.curves)):
         for b in bindings:
             pinned = ", ".join(f"{k}={v!r}" for k, v in sorted(b.kwargs.items()))
             lines.append(
-                f"| `{b.name}`{kind} | {b.description} | "
-                f"`{b.fn.__module__}.{b.fn.__qualname__}` | {pinned or '—'} |"
+                f"| `{b.name}`{kind} | {b.value_range} | {arrows[b.direction]} | "
+                f"{b.description} | `{b.fn.__module__}.{b.fn.__qualname__}` | "
+                f"{pinned or '—'} |"
             )
     lines.append("")
     if task.summary:

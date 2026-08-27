@@ -18,7 +18,15 @@ def _task(metrics: tuple[MetricBinding, ...], task_type: str = "test_task") -> T
 
 
 def _b(name: str, fn, inputs=_PAIR, kwargs=None) -> MetricBinding:
-    return MetricBinding(name, fn, inputs, kwargs or {}, description="t")
+    return MetricBinding(
+        name,
+        fn,
+        inputs,
+        kwargs or {},
+        description="t",
+        value_range="[0, 1]",
+        direction="higher",
+    )
 
 
 def test_signature_is_derived_and_stable():
@@ -40,6 +48,22 @@ def test_signature_changes_with_kwargs_bindings_and_inputs():
 def test_bindings_need_a_description():
     with pytest.raises(ValueError, match="needs a description"):
         _task((MetricBinding("m", _reg.mse, _PAIR),))
+
+
+def test_metrics_need_a_value_range_and_direction():
+    with pytest.raises(ValueError, match="value_range"):
+        _task((MetricBinding("m", _reg.mse, _PAIR, description="t"),))
+    with pytest.raises(ValueError, match="direction"):
+        _task(
+            (
+                MetricBinding(
+                    "m", _reg.mse, _PAIR, description="t", value_range="[0, 1]"
+                ),
+            )
+        )
+    for task in TASKS.values():
+        for b in task.metrics + task.curves:
+            assert b.value_range and b.direction in ("higher", "lower", "none"), b.name
 
 
 def test_lambdas_are_rejected():
