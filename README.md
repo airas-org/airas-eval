@@ -179,9 +179,8 @@ uv lock && uv run pytest -q
 git commit -am "release: v0.3.0" && git tag v0.3.0 && git push --tags
 ```
 
-その後 Actions から `Publish` を手動実行する(HEAD にその版のタグが付いていることを
-ワークフローが検証する)。Trusted Publisher が動くことを確認したら、`publish.yml` の
-トリガーを `push: tags: ["v*"]` に切り替えてタグ push だけで公開できるようにする。
+タグの push で `Publish` ワークフローが起動し、HEAD にその版のタグが付いていることを
+検証してから PyPI に公開する(Actions から手動実行も可能)。
 
 ## 開発
 

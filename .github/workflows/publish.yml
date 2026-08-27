@@ -1,8 +1,11 @@
 name: Publish
 
-# Manual for now (PyPI Trusted Publisher not configured yet). Once it is,
-# switch the trigger to `push: tags: ["v*"]`.
+# Publishes to PyPI via Trusted Publisher on every version tag. The build job
+# verifies that the tag matches the package version. workflow_dispatch stays
+# available for re-running a release manually.
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
 jobs:
