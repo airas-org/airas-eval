@@ -2,6 +2,23 @@ from importlib.metadata import version as _version
 
 __version__ = _version("airas-eval")
 
-from airas_eval.evaluator import EvaluationReport, evaluate  # noqa: E402
+from airas_eval.evaluator import (  # noqa: E402
+    AggregateReport,
+    ComparisonReport,
+    EvaluationReport,
+    aggregate_reports,
+    compare,
+    evaluate,
+    validate_inputs,
+)
 
-__all__ = ["EvaluationReport", "__version__", "evaluate"]
+__all__ = [
+    "AggregateReport",
+    "ComparisonReport",
+    "EvaluationReport",
+    "__version__",
+    "aggregate_reports",
+    "compare",
+    "evaluate",
+    "validate_inputs",
+]

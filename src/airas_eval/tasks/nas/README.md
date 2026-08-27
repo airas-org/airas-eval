@@ -10,12 +10,12 @@
 
 | タスクタイプ | 指標数 | うち曲線 |
 |---|---|---|
-| [`nas_pre_training`](#naspretraining) | 18 | 2 |
+| [`nas_pre_training`](#naspretraining) | 20 | 4 |
 | [`nas_post_training`](#nasposttraining) | 18 | 1 |
 
 ### `nas_pre_training`
 
-署名: `nas_pre_training/v1@edf60dd49403`
+署名: `nas_pre_training/v1@4045fab014ab`
 
 NAS・学習前:この実行自身が学習していないアーキテクチャの性能。探索中に表形式ベンチマークから参照したスコア、あるいは性能予測器・ゼロコストプロキシによる推定値を評価する。任意グループ2つのうち少なくとも1つが必要。``search``は汎用``search``タスクの全指標にNASのプロトコルを加えたもの(推定wall-clockコストに対する暫定最良、探索空間内での位置、同じ予算のランダム探索ベースライン、探索空間平均に対する改善)。``predictor``は汎用``candidate_ranking``の全指標に、真の上位10%に限定したKendall / Spearmanを加えたもの(NAS-Bench-Suite-Zeroのプロトコル)。省略されたグループは黙って消えず、報告される。
 
@@ -62,6 +62,8 @@ NAS・学習前:この実行自身が学習していないアーキテクチャ�
 | `predictor.best_true_rank_in_top_10` | 予測上位 10 件の中に含まれる候補の真の順位の最良値(1 始まり)。1 なら真の最良候補が上位 10 件に入っている。 | `airas_eval.metrics.selection.best_true_rank_in_predicted_top_k` | k=10 |
 | `predictor.kendall_tau_top_10pct` | 真のスコアが上位 10% の候補だけに限定した Kendall の τ。空間全体では順位を当てても上位を取りこぼす予測器を検出する(NAS-Bench-Suite-Zero)。 | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='kendall' |
 | `predictor.spearman_rho_top_10pct` | 真のスコアが上位 10% の候補だけに限定した Spearman の ρ。 | `airas_eval.metrics.selection.rank_correlation_top_fraction` | fraction=0.1, method='spearman' |
+| `predictor.selection_regret_curve`(曲線) | k = 1..n の各 k での選択リグレット。固定 k のスカラーを掃引の中で読むための曲線。 | `airas_eval.metrics.selection.selection_regret_curve` | — |
+| `predictor.precision_at_top_k_curve`(曲線) | k = 1..n の各 k での上位 k 集合の一致率(|予測上位k ∩ 真の上位k| / k)。 | `airas_eval.metrics.selection.precision_at_top_k_curve` | — |
 
 入力サイズ(指標ではない):
 
@@ -69,7 +71,7 @@ NAS・学習前:この実行自身が学習していないアーキテクチャ�
 
 ### `nas_post_training`
 
-署名: `nas_post_training/v1@da41367e81a7`
+署名: `nas_post_training/v1@9da3472156cf`
 
 NAS・学習後:探索が選び、学習した最終アーキテクチャの性能。必須グループ``architecture``は汎用``classification``の全指標に、Yang et al. (ICLR 2020)が求めるベースライン—同じパイプラインで学習したランダムアーキテクチャ群に対する相対精度—と、ベンチマークの公表テスト最適値に対するテストリグレットを加えたもの。任意グループ``tradeoff``は(誤り率,コスト)点集合に対する汎用の多目的フロント評価で、精度と効率のトレードオフに関する主張のためのもの。
 
@@ -100,6 +102,10 @@ NAS・学習後:探索が選び、学習した最終アーキテクチャの性�
 - `architecture.n_examples` — 評価に使われた事例数。
 - `architecture.n_classes` — 確率行列の列数(クラス数)。
 - `architecture.n_random_architectures` — ベースラインとして与えられたランダムアーキテクチャの数。
+
+事例ごとのスコア(`compare` 用、指標ではない):
+
+- `architecture.correct` — 事例ごとの正誤(1/0)。2 システムのペア比較(compare)に使う。
 
 **グループ `tradeoff`**(任意)
 

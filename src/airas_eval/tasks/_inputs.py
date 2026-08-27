@@ -10,7 +10,7 @@ finite number is expected.
 from typing import Any
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class GroupInputs(BaseModel):
@@ -35,9 +35,17 @@ def _check_finite(values: Any, name: str) -> None:
 class ClassificationInputs(GroupInputs):
     """Labels are integer-coded classes; probabilities are (n, n_classes)."""
 
-    predicted_labels: list[int]
-    reference_labels: list[int]
-    probabilities: list[list[float]] | None = None
+    predicted_labels: list[int] = Field(
+        description="各事例の予測クラス(0 始まりの整数)。reference_labels と同じ長さ・順序。"
+    )
+    reference_labels: list[int] = Field(
+        description="各事例の正解クラス(0 始まりの整数)。実験設計で固定された参照データ。"
+    )
+    probabilities: list[list[float]] | None = Field(
+        default=None,
+        description="各事例のクラス確率 (n_examples, n_classes)。省略すると確率系の指標"
+        "(log_loss, ECE, top-5, AUROC 等)は skipped になる。",
+    )
 
     @field_validator("probabilities")
     @classmethod
@@ -56,8 +64,14 @@ class SearchInputs(GroupInputs):
     (a self-chosen oracle makes regret meaningless).
     """
 
-    evaluated_scores: list[float]
-    oracle_best: float | None = None
+    evaluated_scores: list[float] = Field(
+        description="探索が評価した候補のスコアを評価順に並べたもの。高いほど良い。"
+    )
+    oracle_best: float | None = Field(
+        default=None,
+        description="ベンチマークの公表最適値(evaluated_scores と同じ単位)。実験設計で固定し、"
+        "agent は選ばない。省略すると regret 系は skipped。",
+    )
 
     @field_validator("evaluated_scores", "oracle_best")
     @classmethod
@@ -70,8 +84,12 @@ class SearchInputs(GroupInputs):
 class CandidateRankingInputs(GroupInputs):
     """Predicted vs true scores over a fixed candidate set (higher=better)."""
 
-    predicted_scores: list[float]
-    reference_scores: list[float]
+    predicted_scores: list[float] = Field(
+        description="予測器・プロキシが各候補に与えたスコア。高いほど良い候補と予測。"
+    )
+    reference_scores: list[float] = Field(
+        description="各候補の真のスコア(ベンチマークの学習済み精度など)。同じ長さ・順序。"
+    )
 
     @field_validator("predicted_scores", "reference_scores")
     @classmethod
@@ -84,9 +102,19 @@ class MultiobjectiveInputs(GroupInputs):
     """Objective vectors per candidate, lower-is-better in every objective
     (use error rate, not accuracy, next to parameter count / MACs)."""
 
-    points: list[list[float]]
-    reference_point: list[float] | None = None
-    reference_front: list[list[float]] | None = None
+    points: list[list[float]] = Field(
+        description="候補ごとの目的ベクトル (n_points, n_objectives)。全目的を最小化"
+        "(精度ではなく誤り率、パラメータ数、MACs など)。"
+    )
+    reference_point: list[float] | None = Field(
+        default=None,
+        description="hypervolume の参照点(各目的の許容最悪値)。実験設計で固定し、結果を見て"
+        "から選ばない。省略すると hypervolume は skipped。",
+    )
+    reference_front: list[list[float]] | None = Field(
+        default=None,
+        description="既知の参照 Pareto フロント。IGD/GD に使う。省略するとそれらは skipped。",
+    )
 
     @field_validator("points", "reference_point", "reference_front")
     @classmethod

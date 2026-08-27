@@ -66,3 +66,23 @@ def test_rank_correlation_top_fraction():
     ) == pytest.approx(-1.0)
     with pytest.raises(UndefinedMetric):
         selection.rank_correlation_top_fraction(ref, ref, 0.1, method="kendall")
+
+
+def test_selection_regret_curve_is_monotone_and_ends_at_zero():
+    ref = [1.0, 5.0, 3.0, 4.0]
+    pred = [9.0, 0.0, 5.0, 6.0]  # picks 0, 3, 2, 1 in that order
+    curve = selection.selection_regret_curve(pred, ref)
+    assert curve == [4.0, 1.0, 1.0, 0.0]
+    assert curve[0] == selection.selection_regret_at_k(pred, ref, 1)
+    assert all(a >= b for a, b in zip(curve, curve[1:], strict=False))
+
+
+def test_precision_at_top_k_curve():
+    ref = [1.0, 5.0, 3.0, 4.0]
+    pred = [9.0, 0.0, 5.0, 6.0]  # predicted order 0,3,2,1 ; true order 1,3,2,0
+    curve = selection.precision_at_top_k_curve(pred, ref)
+    # k=1: {0} vs {1} -> 0; k=2: {0,3} vs {1,3} -> 1/2
+    # k=3: {0,3,2} vs {1,3,2} -> 2/3; k=4 -> 1
+    assert curve == pytest.approx([0.0, 0.5, 2 / 3, 1.0])
+    perfect = selection.precision_at_top_k_curve(ref, ref)
+    assert perfect == [1.0] * 4

@@ -104,3 +104,29 @@ def rank_correlation_top_fraction(
     top = _top_k_indices(ref, k)
     fn = _reg.kendall_tau if method == "kendall" else _reg.spearman_rho
     return fn(pred[top], ref[top])
+
+
+def selection_regret_curve(
+    predicted_scores: Sequence[float], reference_scores: Sequence[float]
+) -> list[float]:
+    """Selection regret at k for every k = 1..n: the k-sweep behind
+    ``selection_regret_at_k``, so the pinned scalar can be read in context."""
+    pred, ref = paired_1d(predicted_scores, reference_scores, dtype=float)
+    order = _top_k_indices(pred, len(pred))
+    running_best = np.maximum.accumulate(ref[order])
+    return [float(v) for v in ref.max() - running_best]
+
+
+def precision_at_top_k_curve(
+    predicted_scores: Sequence[float], reference_scores: Sequence[float]
+) -> list[float]:
+    """|top-k(pred) ∩ top-k(ref)| / k for every k = 1..n."""
+    pred, ref = paired_1d(predicted_scores, reference_scores, dtype=float)
+    n = len(pred)
+    pred_order = _top_k_indices(pred, n)
+    ref_rank = np.empty(n, dtype=int)
+    ref_rank[_top_k_indices(ref, n)] = np.arange(n)
+    # candidate at predicted position i is in the true top-k iff ref_rank < k
+    ranks_in_pred_order = ref_rank[pred_order]
+    hits = np.array([int(np.sum(ranks_in_pred_order[:k] < k)) for k in range(1, n + 1)])
+    return [float(h / k) for k, h in enumerate(hits, start=1)]

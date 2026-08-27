@@ -13,12 +13,12 @@
 | [`classification`](#classification) | 9 | 0 |
 | [`binary_classification`](#binaryclassification) | 11 | 0 |
 | [`search`](#search) | 6 | 1 |
-| [`candidate_ranking`](#candidateranking) | 5 | 0 |
+| [`candidate_ranking`](#candidateranking) | 7 | 2 |
 | [`multiobjective`](#multiobjective) | 6 | 1 |
 
 ### `classification`
 
-署名: `classification/v1@1a0f2d1fefc1`
+署名: `classification/v1@f04c21b39c2f`
 
 - 必須入力: `predicted_labels`, `reference_labels`
 - 任意入力: `probabilities`
@@ -42,9 +42,13 @@
 - `main.n_examples` — 評価に使われた事例数。
 - `main.n_classes` — 確率行列の列数(クラス数)。
 
+事例ごとのスコア(`compare` 用、指標ではない):
+
+- `main.correct` — 事例ごとの正誤(1/0)。2 システムのペア比較(compare)に使う。
+
 ### `binary_classification`
 
-署名: `binary_classification/v1@2b1dbf7d6254`
+署名: `binary_classification/v1@c71bf7c134a8`
 
 Generic task: binary classification with positive-class scores.
 
@@ -71,9 +75,13 @@ Generic task: binary classification with positive-class scores.
 
 - `main.n_examples` — 評価に使われた事例数。
 
+事例ごとのスコア(`compare` 用、指標ではない):
+
+- `main.correct` — 事例ごとの正誤(1/0)。2 システムのペア比較(compare)に使う。
+
 ### `search`
 
-署名: `search/v1@93949e98fb21`
+署名: `search/v1@2723032a774d`
 
 - 必須入力: `evaluated_scores`
 - 任意入力: `oracle_best`
@@ -95,7 +103,7 @@ Generic task: binary classification with positive-class scores.
 
 ### `candidate_ranking`
 
-署名: `candidate_ranking/v1@77eaa965199b`
+署名: `candidate_ranking/v1@28c947b46df7`
 
 - 必須入力: `predicted_scores`, `reference_scores`
 - 任意入力: —
@@ -109,6 +117,8 @@ Generic task: binary classification with positive-class scores.
 | `main.precision_at_top_10pct` | 上位 10% の一致率。予測で上位 10% とされた候補集合と、真の上位 10% の集合の重なりの割合。 | `airas_eval.metrics.selection.precision_at_top_fraction` | fraction=0.1 |
 | `main.selection_regret_at_1` | 選択リグレット@1。予測で 1 位とした候補の真のスコアと、真の最良スコアとの差。予測器を信じて 1 つ選んだときの損失。 | `airas_eval.metrics.selection.selection_regret_at_k` | k=1 |
 | `main.best_true_rank_in_top_10` | 予測上位 10 件の中に含まれる候補の真の順位の最良値(1 始まり)。1 なら真の最良候補が上位 10 件に入っている。 | `airas_eval.metrics.selection.best_true_rank_in_predicted_top_k` | k=10 |
+| `main.selection_regret_curve`(曲線) | k = 1..n の各 k での選択リグレット。固定 k のスカラーを掃引の中で読むための曲線。 | `airas_eval.metrics.selection.selection_regret_curve` | — |
+| `main.precision_at_top_k_curve`(曲線) | k = 1..n の各 k での上位 k 集合の一致率(|予測上位k ∩ 真の上位k| / k)。 | `airas_eval.metrics.selection.precision_at_top_k_curve` | — |
 
 入力サイズ(指標ではない):
 
@@ -116,7 +126,7 @@ Generic task: binary classification with positive-class scores.
 
 ### `multiobjective`
 
-署名: `multiobjective/v1@1de926e5a3a8`
+署名: `multiobjective/v1@4a410e435be8`
 
 - 必須入力: `points`
 - 任意入力: `reference_point`, `reference_front`

@@ -1,4 +1,4 @@
-"""The scoring entry point: ``evaluate(task_type, inputs)``.
+"""The scoring entry points: ``evaluate``, ``aggregate_reports``, ``compare``.
 
 Computes the full pinned metric set for a task type — there is no parameter
 for choosing metrics, variants, or which part of the task to report. Inputs
@@ -16,6 +16,7 @@ edit; the Python API is a convenience for that job and for humans.
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from importlib import metadata as _metadata
 from typing import Any
@@ -25,6 +26,7 @@ from pydantic import ValidationError
 
 from airas_eval import __version__
 from airas_eval.exceptions import NotApplicable, UndefinedMetric
+from airas_eval.metrics import stats as _stats
 from airas_eval.spec import MetricBinding, SkipCode, TaskSpec
 
 
@@ -36,6 +38,34 @@ class EvaluationReport:
     skipped: dict[str, dict[str, str]]
     inputs_summary: dict[str, float]
     omitted_optional_inputs: list[str]
+    provenance: dict[str, Any]
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(asdict(self), indent=indent, sort_keys=True, allow_nan=False)
+
+
+@dataclass
+class AggregateReport:
+    """Mean ± std over repeated runs (seeds) of the same task signature."""
+
+    task_type: str
+    n_reports: int
+    metrics: dict[str, dict[str, float]]
+    inputs_summary: dict[str, dict[str, float]]
+    incomplete: dict[str, int]
+    provenance: dict[str, Any]
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(asdict(self), indent=indent, sort_keys=True, allow_nan=False)
+
+
+@dataclass
+class ComparisonReport:
+    """Paired comparison of two systems on the same examples, per group."""
+
+    task_type: str
+    comparisons: dict[str, dict[str, float]]
+    skipped: dict[str, str]
     provenance: dict[str, Any]
 
     def to_json(self, indent: int = 2) -> str:
@@ -121,6 +151,17 @@ def _validate_groups(task: TaskSpec, inputs: dict[str, Any]) -> dict[str, Any]:
             ) from err
         data[group.name] = model.model_dump()
     return data
+
+
+def validate_inputs(task_type: str, inputs: dict[str, Any]) -> list[str]:
+    """Check an inputs file against the task contract without scoring.
+
+    Returns the names of groups that were provided; raises ValueError with
+    the same messages ``evaluate`` would.
+    """
+    task = _get_task(task_type)
+    data = _validate_groups(task, inputs)
+    return [name for name, value in data.items() if value is not None]
 
 
 def _run_binding(
@@ -227,5 +268,124 @@ def evaluate(task_type: str, inputs: dict[str, Any]) -> EvaluationReport:
             "task_signature": task.signature(),
             "versions": _versions(task.provenance_packages()),
             "inputs_sha256": _inputs_sha256(data),
+        },
+    )
+
+
+def aggregate_reports(reports: Sequence[dict[str, Any]]) -> AggregateReport:
+    """Mean ± sample std per metric over repeated runs (e.g. seeds).
+
+    Takes report dicts (``EvaluationReport`` as JSON). All reports must share
+    one task signature — mixing versions or task types is a contract
+    violation. A metric missing from some reports is listed under
+    ``incomplete`` (with how many reports had it) instead of being averaged
+    over a shifting subset.
+    """
+    if not reports:
+        raise ValueError("need at least one report to aggregate")
+    signatures = {r["provenance"]["task_signature"] for r in reports}
+    if len(signatures) != 1:
+        raise ValueError(
+            f"cannot aggregate across task signatures: {sorted(signatures)}"
+        )
+
+    def _aggregate(key: str) -> tuple[dict[str, dict[str, float]], dict[str, int]]:
+        names = sorted({name for r in reports for name in r[key]})
+        full: dict[str, dict[str, float]] = {}
+        partial: dict[str, int] = {}
+        for name in names:
+            values = [r[key][name] for r in reports if name in r[key]]
+            if len(values) != len(reports):
+                partial[name] = len(values)
+                continue
+            full[name] = _stats.mean_std(values)
+        return full, partial
+
+    metrics, incomplete = _aggregate("metrics")
+    summary, incomplete_summary = _aggregate("inputs_summary")
+    incomplete.update(incomplete_summary)
+    first = reports[0]
+    return AggregateReport(
+        task_type=first["task_type"],
+        n_reports=len(reports),
+        metrics=metrics,
+        inputs_summary=summary,
+        incomplete=incomplete,
+        provenance={
+            "task_signature": first["provenance"]["task_signature"],
+            "versions": first["provenance"]["versions"],
+            "inputs_sha256": [r["provenance"]["inputs_sha256"] for r in reports],
+        },
+    )
+
+
+def compare(
+    task_type: str, inputs_a: dict[str, Any], inputs_b: dict[str, Any]
+) -> ComparisonReport:
+    """Paired significance test between two systems on the same examples.
+
+    For every group that declares per-example scores and is present on both
+    sides: requires identical reference data (same reference fields), then
+    reports mean scores, the mean paired difference (a - b) and a two-sided
+    sign-flip permutation p-value. Provided so research agents never have to
+    implement their own significance testing.
+    """
+    task = _get_task(task_type)
+    data_a = _validate_groups(task, inputs_a)
+    data_b = _validate_groups(task, inputs_b)
+    comparisons: dict[str, dict[str, float]] = {}
+    skipped: dict[str, str] = {}
+
+    for group in task.groups:
+        bundle = group.bundle
+        if not bundle.per_example:
+            skipped[group.name] = "group declares no per-example score"
+            continue
+        ga, gb = data_a[group.name], data_b[group.name]
+        if ga is None or gb is None:
+            skipped[group.name] = "group not provided on both sides"
+            continue
+        predicted = {b.inputs[0] for b in bundle.per_example}
+        reference_keys = [k for k in ga if k not in predicted]
+        if any(
+            _inputs_sha256(ga.get(k)) != _inputs_sha256(gb.get(k))
+            for k in reference_keys
+        ):
+            raise ValueError(
+                f"group {group.name!r}: paired comparison requires identical "
+                f"reference inputs on both sides ({', '.join(reference_keys)})"
+            )
+        for binding in bundle.per_example:
+            name = f"{group.name}.{binding.name}"
+            a = np.asarray(
+                binding.fn(*(ga[k] for k in binding.inputs), **binding.kwargs),
+                dtype=float,
+            )
+            b = np.asarray(
+                binding.fn(*(gb[k] for k in binding.inputs), **binding.kwargs),
+                dtype=float,
+            )
+            if a.shape != b.shape:
+                raise ValueError(
+                    f"{name}: per-example score shapes differ: {a.shape} vs {b.shape}"
+                )
+            comparisons[name] = {
+                "mean_a": float(a.mean()),
+                "mean_b": float(b.mean()),
+                "mean_diff": float((a - b).mean()),
+                "p_value": _stats.paired_permutation_test(a.tolist(), b.tolist()),
+                "n_examples": float(len(a)),
+            }
+
+    return ComparisonReport(
+        task_type=task_type,
+        comparisons=comparisons,
+        skipped=skipped,
+        provenance={
+            "task_signature": task.signature(),
+            "versions": _versions(task.provenance_packages()),
+            "inputs_a_sha256": _inputs_sha256(data_a),
+            "inputs_b_sha256": _inputs_sha256(data_b),
+            "test": "two-sided paired sign-flip permutation, 10000 resamples, seed 0",
         },
     )

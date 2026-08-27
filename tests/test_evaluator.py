@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from airas_eval import evaluate
+from airas_eval import aggregate_reports, compare, evaluate, validate_inputs
 from airas_eval.tasks import TASKS
 
 rng = np.random.default_rng(5)
@@ -368,3 +368,107 @@ def test_version_comes_from_installed_metadata():
     import airas_eval
 
     assert airas_eval.__version__ == version("airas-eval")
+
+
+def test_validate_inputs_without_scoring():
+    assert validate_inputs("nas_pre_training", {"predictor": RANK_SMALL}) == [
+        "predictor"
+    ]
+    with pytest.raises(ValueError, match="unknown group"):
+        validate_inputs("nas_pre_training", {"main": RANK_SMALL})
+
+
+def test_input_schema_is_derived_from_the_models():
+    schema = TASKS["nas_post_training"].input_schema()
+    assert schema["required"] == ["architecture"]
+    assert set(schema["properties"]) == {"architecture", "tradeoff"}
+    arch = schema["properties"]["architecture"]
+    assert arch["additionalProperties"] is False
+    assert set(arch["required"]) == {"predicted_labels", "reference_labels"}
+    assert "oracle_test_best" in arch["properties"]
+    assert arch["properties"]["oracle_test_best"]["description"]
+    assert TASKS["nas_pre_training"].input_schema()["required"] == []
+    assert TASKS["nas_pre_training"].input_schema()["minProperties"] == 1
+
+
+def _seed_reports(n: int) -> list[dict]:
+    reports = []
+    for seed in range(n):
+        r = np.random.default_rng(seed)
+        y_true = r.integers(0, 3, size=60).tolist()
+        y_pred = np.where(
+            r.random(60) < 0.8, y_true, r.integers(0, 3, size=60)
+        ).tolist()
+        report = evaluate(
+            "classification",
+            {"main": {"predicted_labels": y_pred, "reference_labels": y_true}},
+        )
+        reports.append(json.loads(report.to_json()))
+    return reports
+
+
+def test_aggregate_reports_over_seeds():
+    agg = aggregate_reports(_seed_reports(3))
+    assert agg.n_reports == 3
+    assert agg.metrics["main.accuracy"]["n"] == 3.0
+    assert 0.0 <= agg.metrics["main.accuracy"]["std"] < 0.2
+    assert agg.inputs_summary["main.n_examples"]["mean"] == 60.0
+    assert agg.incomplete == {}
+    assert len(agg.provenance["inputs_sha256"]) == 3
+    json.loads(agg.to_json())
+
+
+def test_aggregate_rejects_mixed_signatures_and_reports_incomplete():
+    a = _seed_reports(1)[0]
+    b = json.loads(
+        evaluate("search", {"main": {"evaluated_scores": [1.0, 2.0]}}).to_json()
+    )
+    with pytest.raises(ValueError, match="task signatures"):
+        aggregate_reports([a, b])
+    c = json.loads(
+        evaluate(
+            "classification",
+            {"main": {**CLS_NO_PROBS, "probabilities": None}},
+        ).to_json()
+    )
+    d = json.loads(evaluate("classification", {"main": CLS_FULL}).to_json())
+    agg = aggregate_reports([c, d])
+    assert agg.incomplete["main.log_loss"] == 1  # only the run with probabilities
+
+
+def test_compare_paired_on_classification():
+    r = np.random.default_rng(1)
+    y_true = r.integers(0, 2, size=120).tolist()
+    good = np.where(r.random(120) < 0.9, y_true, 1 - np.array(y_true)).tolist()
+    bad = np.where(r.random(120) < 0.55, y_true, 1 - np.array(y_true)).tolist()
+    result = compare(
+        "nas_post_training",
+        {"architecture": {"predicted_labels": good, "reference_labels": y_true}},
+        {"architecture": {"predicted_labels": bad, "reference_labels": y_true}},
+    )
+    c = result.comparisons["architecture.correct"]
+    assert c["mean_a"] > c["mean_b"]
+    assert c["mean_diff"] == pytest.approx(c["mean_a"] - c["mean_b"])
+    assert 0.0 < c["p_value"] < 0.05
+    assert c["n_examples"] == 120.0
+    assert "no per-example" in result.skipped["tradeoff"]
+    json.loads(result.to_json())
+
+
+def test_compare_requires_identical_reference_data():
+    with pytest.raises(ValueError, match="identical reference"):
+        compare(
+            "classification",
+            {"main": {"predicted_labels": [0, 1], "reference_labels": [0, 1]}},
+            {"main": {"predicted_labels": [0, 1], "reference_labels": [1, 1]}},
+        )
+
+
+def test_compare_skips_groups_without_per_example_scores():
+    result = compare(
+        "search",
+        {"main": {"evaluated_scores": [1.0]}},
+        {"main": {"evaluated_scores": [2.0]}},
+    )
+    assert result.comparisons == {}
+    assert "no per-example" in result.skipped["main"]

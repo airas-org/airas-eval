@@ -144,6 +144,7 @@ PREDICTOR = Bundle(
             description="真のスコアが上位 10% の候補だけに限定した Spearman の ρ。",
         ),
     ),
+    curves=core.CANDIDATE_RANKING.curves,
     summary=core.CANDIDATE_RANKING.summary,
 )
 
@@ -191,6 +192,7 @@ def test_regret(
 
 ARCHITECTURE = Bundle(
     input_model=NasArchitectureInputs,
+    per_example=core.CLASSIFICATION.per_example,
     provenance_packages=core.CLASSIFICATION.provenance_packages,
     notes=(
         core.CLASSIFICATION.notes

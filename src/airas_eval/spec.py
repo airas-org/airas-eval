@@ -23,12 +23,27 @@ what gets computed changes the signature.
 
 import hashlib
 import json
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel
+
+
+def unwrap_text(text: str) -> str:
+    """Join wrapped docstring lines: no space between CJK characters, one
+    space otherwise (so English words at a line break stay separated)."""
+    words = text.split()
+    out = words[:1]
+    for word in words[1:]:
+        wide = unicodedata.east_asian_width
+        if wide(out[-1][-1]) in ("W", "F") or wide(word[0]) in ("W", "F"):
+            out[-1] += word
+        else:
+            out.append(word)
+    return " ".join(out)
 
 
 class SkipCode(str, Enum):
@@ -76,6 +91,8 @@ class Bundle:
     ``metrics`` and ``curves`` are the evaluation results; ``summary`` holds
     input-size facts (n_examples, ...) that are reported separately from
     metrics but are part of the contract and the signature all the same.
+    ``per_example`` bindings return one score per example (higher is better)
+    and exist only to feed paired comparisons between two systems.
 
     Not registered, not evaluable on its own: tasks compose bundles into
     named groups. Validation of the declaration happens here so a broken
@@ -86,6 +103,7 @@ class Bundle:
     metrics: tuple[MetricBinding, ...]
     curves: tuple[MetricBinding, ...] = ()
     summary: tuple[MetricBinding, ...] = ()
+    per_example: tuple[MetricBinding, ...] = ()
     provenance_packages: tuple[str, ...] = ("numpy",)
     notes: str = ""
 
@@ -113,7 +131,7 @@ class Bundle:
 
     @property
     def bindings(self) -> tuple[MetricBinding, ...]:
-        return self.metrics + self.curves + self.summary
+        return self.metrics + self.curves + self.summary + self.per_example
 
     def required_inputs(self) -> tuple[str, ...]:
         return tuple(
@@ -134,6 +152,7 @@ class Bundle:
             "metrics": [b.declaration() for b in self.metrics],
             "curves": [b.declaration() for b in self.curves],
             "summary": [b.declaration() for b in self.summary],
+            "per_example": [b.declaration() for b in self.per_example],
         }
 
 
@@ -195,6 +214,29 @@ class TaskSpec:
             for package in g.bundle.provenance_packages:
                 seen.setdefault(package, None)
         return tuple(seen)
+
+    def input_schema(self) -> dict[str, Any]:
+        """JSON Schema of the inputs file: one object per group.
+
+        Generated from the same pydantic models that validate inputs, so the
+        contract an agent reads and the check the evaluator applies cannot
+        diverge. Semantic conventions live in the field descriptions.
+        """
+        properties: dict[str, Any] = {}
+        for group in self.groups:
+            schema = group.bundle.input_model.model_json_schema()
+            schema["description"] = group.bundle.notes
+            properties[group.name] = schema
+        return {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "title": f"{self.task_type} inputs",
+            "description": unwrap_text(self.description),
+            "type": "object",
+            "properties": properties,
+            "required": list(self.required_groups()),
+            "minProperties": 1,
+            "additionalProperties": False,
+        }
 
     def declaration(self) -> dict[str, Any]:
         """Canonical description of what this task computes.

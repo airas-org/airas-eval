@@ -64,6 +64,26 @@ def n_examples(predicted_labels: Labels, reference_labels: Labels) -> float:
     return float(len(reference_labels))
 
 
+def per_example_correct(
+    predicted_labels: Labels, reference_labels: Labels
+) -> list[float]:
+    predicted = np.asarray(predicted_labels)
+    reference = np.asarray(reference_labels)
+    if predicted.shape != reference.shape:
+        raise ValueError(f"length mismatch: {predicted.shape} vs {reference.shape}")
+    return [float(v) for v in (predicted == reference)]
+
+
+_CORRECT = (
+    MetricBinding(
+        "correct",
+        per_example_correct,
+        ("predicted_labels", "reference_labels"),
+        description="事例ごとの正誤(1/0)。2 システムのペア比較(compare)に使う。",
+    ),
+)
+
+
 def n_classes(probabilities: Probs) -> float:
     probs = np.asarray(probabilities, dtype=float)
     if probs.ndim != 2:
@@ -83,6 +103,7 @@ _PROBS = ("probabilities", "reference_labels")
 
 CLASSIFICATION = Bundle(
     input_model=ClassificationInputs,
+    per_example=_CORRECT,
     provenance_packages=("numpy", "scikit-learn"),
     notes=(
         "単一ラベルの多クラス分類。precision/recall/F1 はマクロ平均で zero_division=0"
@@ -164,6 +185,7 @@ CLASSIFICATION = Bundle(
 
 BINARY_CLASSIFICATION = Bundle(
     input_model=ClassificationInputs,
+    per_example=_CORRECT,
     provenance_packages=("numpy", "scikit-learn"),
     notes=(
         "ラベルは {0, 1}。スコア系指標は probabilities[:, 1] を正例確率として読む。"
@@ -328,11 +350,6 @@ def n_candidates(predicted_scores: list[float], reference_scores: list[float]) -
 
 _PAIR = ("predicted_scores", "reference_scores")
 
-# TODO(k-sweep): callers only see the report (uvx airas-eval score), so the
-# way to expose "what if k / fraction were different" is a curve, not a knob:
-# add ``selection_regret_curve`` (regret@k for k=1..n) and
-# ``precision_at_top_k_curve`` under ``curves``. The scalar pins stay as the
-# summary values.
 CANDIDATE_RANKING = Bundle(
     input_model=CandidateRankingInputs,
     provenance_packages=("numpy", "scipy"),
@@ -373,6 +390,20 @@ CANDIDATE_RANKING = Bundle(
             _PAIR,
             {"k": 10},
             description="予測上位 10 件の中に含まれる候補の真の順位の最良値(1 始まり)。1 なら真の最良候補が上位 10 件に入っている。",
+        ),
+    ),
+    curves=(
+        MetricBinding(
+            "selection_regret_curve",
+            _sel.selection_regret_curve,
+            _PAIR,
+            description="k = 1..n の各 k での選択リグレット。固定 k のスカラーを掃引の中で読むための曲線。",
+        ),
+        MetricBinding(
+            "precision_at_top_k_curve",
+            _sel.precision_at_top_k_curve,
+            _PAIR,
+            description="k = 1..n の各 k での上位 k 集合の一致率(|予測上位k ∩ 真の上位k| / k)。",
         ),
     ),
     summary=(

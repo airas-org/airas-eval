@@ -5,36 +5,18 @@
 README は手書きせず必ず宣言から導出する。
 """
 
-import unicodedata
 from pathlib import Path
 
-from airas_eval.spec import TaskSpec
+from airas_eval.spec import TaskSpec, unwrap_text
 from airas_eval.tasks import AREAS
 
 _HERE = Path(__file__).parent
 
 
-def _is_wide(char: str) -> bool:
-    return unicodedata.east_asian_width(char) in ("W", "F")
-
-
-def _unwrap(text: str) -> str:
-    """Join wrapped docstring lines: no space between CJK characters, one
-    space otherwise (so English words at a line break stay separated)."""
-    words = text.split()
-    out = words[:1]
-    for word in words[1:]:
-        if _is_wide(out[-1][-1]) or _is_wide(word[0]):
-            out[-1] += word
-        else:
-            out.append(word)
-    return " ".join(out)
-
-
 def render_task(task: TaskSpec) -> str:
     lines = [f"### `{task.task_type}`", "", f"署名: `{task.signature()}`", ""]
     if task.description:
-        lines += [_unwrap(task.description), ""]
+        lines += [unwrap_text(task.description), ""]
     if task.notes:
         lines += [task.notes, ""]
     for group in task.groups:
@@ -60,6 +42,13 @@ def render_task(task: TaskSpec) -> str:
             lines += ["入力サイズ(指標ではない):", ""]
             lines += [
                 f"- `{group.name}.{b.name}` — {b.description}" for b in bundle.summary
+            ]
+            lines.append("")
+        if bundle.per_example:
+            lines += ["事例ごとのスコア(`compare` 用、指標ではない):", ""]
+            lines += [
+                f"- `{group.name}.{b.name}` — {b.description}"
+                for b in bundle.per_example
             ]
             lines.append("")
     return "\n".join(lines)

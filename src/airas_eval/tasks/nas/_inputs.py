@@ -3,7 +3,7 @@ NAS benchmarks and evaluation protocols make available."""
 
 from typing import Any
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from airas_eval.tasks._inputs import ClassificationInputs, SearchInputs, _check_finite
 
@@ -20,8 +20,16 @@ class NasSearchInputs(SearchInputs):
       space-relative metrics and the random-search baseline.
     """
 
-    evaluation_costs: list[float] | None = None
-    search_space_scores: list[float] | None = None
+    evaluation_costs: list[float] | None = Field(
+        default=None,
+        description="各評価候補の学習コスト(秒やエポックなど、ベンチマークの公表値)。"
+        "evaluated_scores と同じ順序・長さ。省略すると wall-clock 軸の指標は skipped。",
+    )
+    search_space_scores: list[float] | None = Field(
+        default=None,
+        description="探索空間の全候補のスコア(表形式ベンチマークが公表)。探索空間内順位と"
+        "ランダム探索ベースラインに使う。省略するとそれらは skipped。",
+    )
 
     @field_validator("evaluation_costs", "search_space_scores")
     @classmethod
@@ -58,8 +66,16 @@ class NasArchitectureInputs(ClassificationInputs):
       experimental design, never chosen by the agent.
     """
 
-    random_architecture_accuracies: list[float] | None = None
-    oracle_test_best: float | None = None
+    random_architecture_accuracies: list[float] | None = Field(
+        default=None,
+        description="同じ探索空間から一様に抽出し、同じパイプラインで学習したランダム"
+        "アーキテクチャの正解率(0〜1)。Yang et al. 2020 のベースライン。",
+    )
+    oracle_test_best: float | None = Field(
+        default=None,
+        description="ベンチマークの公表テスト最適値(0〜1 の割合)。実験設計で固定し、agent は"
+        "選ばない。省略すると test_regret は skipped。",
+    )
 
     @field_validator("random_architecture_accuracies")
     @classmethod

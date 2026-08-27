@@ -65,3 +65,51 @@ def test_invalid_inputs_fail_nonzero(tmp_path: Path):
     assert out.returncode != 0
     assert "unknown group" in out.stderr
     assert _run("score", "no_such_task", "--inputs", str(bad)).returncode != 0
+
+
+def test_schema_and_validate(tmp_path: Path):
+    out = _run("schema", "nas_post_training")
+    assert out.returncode == 0, out.stderr
+    schema = json.loads(out.stdout)
+    assert schema["required"] == ["architecture"]
+    ok = _run(
+        "validate",
+        "nas_post_training",
+        "--inputs",
+        str(EXAMPLES / "nas_post_training.json"),
+    )
+    assert ok.returncode == 0 and ok.stdout.startswith("OK:"), ok.stderr
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"architecture": {"predicted_labels": [0]}}))
+    res = _run("validate", "nas_post_training", "--inputs", str(bad))
+    assert res.returncode == 1 and res.stderr.startswith("INVALID:")
+
+
+def test_aggregate_and_compare(tmp_path: Path):
+    example = EXAMPLES / "nas_post_training.json"
+    reports = []
+    for i in range(2):
+        target = tmp_path / f"r{i}.json"
+        assert (
+            _run(
+                "score",
+                "nas_post_training",
+                "--inputs",
+                str(example),
+                "--output",
+                str(target),
+            ).returncode
+            == 0
+        )
+        reports.append(str(target))
+    agg = _run("aggregate", "--reports", *reports)
+    assert agg.returncode == 0, agg.stderr
+    payload = json.loads(agg.stdout)
+    assert payload["n_reports"] == 2
+    assert payload["metrics"]["architecture.accuracy"]["std"] == 0.0
+    cmp = _run("compare", "nas_post_training", "--a", str(example), "--b", str(example))
+    assert cmp.returncode == 0, cmp.stderr
+    assert (
+        json.loads(cmp.stdout)["comparisons"]["architecture.correct"]["mean_diff"]
+        == 0.0
+    )

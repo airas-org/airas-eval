@@ -43,9 +43,15 @@ NAS は「アーキテクチャの性能をいつ測るか」で 2 タスクに�
 どちらも登録情報から導出されるので、実装と食い違うことがない:
 
 ```bash
-airas-eval list                    # 全タスクタイプ: 入力、指標、曲線、入力サイズ、署名
-airas-eval list nas_post_training  # 1 タスクタイプ
+airas-eval list                       # 全タスクタイプ: 入力、指標、曲線、入力サイズ、署名
+airas-eval list nas_post_training     # 1 タスクタイプ
+airas-eval schema nas_post_training   # 入力ファイルの JSON Schema(何をどの形で出すか)
+airas-eval validate nas_post_training --inputs inputs.json   # 形式だけ検査(採点しない)
 ```
+
+`schema` は入力検証に使うのと同じ pydantic モデルから生成されるので、agent が読む契約と
+評価器が適用する検査が食い違わない。各フィールドの説明(単位、高低どちらが良いか、
+省略時にどの指標が skipped になるか)もスキーマに含まれる。
 
 および、エリアごとに生成される README(テストで同期を検証):
 
@@ -87,6 +93,16 @@ report.provenance  # 導出されたタスク署名、依存パッケージの�
 airas-eval score nas_pre_training --inputs inputs.json --output evaluation.json
 ```
 
+複数 seed と 2 システム比較も評価層が引き受ける(agent が統計を自前実装しないため):
+
+```bash
+# seed ごとの report を平均 ± 標準偏差に集約(同じタスク署名のものだけ。欠けている指標は incomplete に列挙)
+airas-eval aggregate --reports evaluation_seed0.json evaluation_seed1.json evaluation_seed2.json
+
+# 同じ参照データ上での 2 システムのペア比較(事例ごとの正誤に対する符号反転パーミュテーション検定)
+airas-eval compare nas_post_training --a inputs_A.json --b inputs_B.json
+```
+
 `examples/` に NAS 各タスクの最小入力ファイルがあり、テストスイートがそれぞれを CLI
 で採点する。NAS 固有の入力(`evaluation_costs`, `search_space_scores`,
 `random_architecture_accuracies`, `oracle_test_best`, ...)は任意の参照データで、
@@ -122,8 +138,8 @@ airas-eval score nas_pre_training --inputs inputs.json --output evaluation.json
 ## インストール
 
 ```bash
-uv add "airas-eval==0.3.0"     # ライブラリ/CLI として
-uvx airas-eval@0.3.0 list      # インストールせずに CLI だけ使う
+uv add "airas-eval==0.4.0"     # ライブラリ/CLI として
+uvx airas-eval@0.4.0 list      # インストールせずに CLI だけ使う
 ```
 
 評価層が研究の途中で変わらないように、必ずバージョンを固定する。依存: numpy,
@@ -139,7 +155,7 @@ agent の実験コードは **airas_eval を import しない**。agent の成�
 ```toml
 # pyproject.toml — 依存として固定するが、実験コードからは import しない
 [dependency-groups]
-eval = ["airas-eval==0.3.0"]
+eval = ["airas-eval==0.4.0"]
 ```
 
 ```makefile
@@ -174,9 +190,9 @@ report の `inputs_sha256` と入力ファイルの hash、`provenance.versions`
 毎回のリリース:
 
 ```bash
-uv version --bump minor          # pyproject と __init__ の版を揃える(現状は手動で両方)
+uv version --bump minor          # 版は pyproject.toml のみ(__version__ はメタデータから読む)
 uv lock && uv run pytest -q
-git commit -am "release: v0.3.0" && git tag v0.3.0 && git push --tags
+git commit -am "release: v0.4.0" && git tag v0.4.0 && git push --tags
 ```
 
 タグの push で `Publish` ワークフローが起動し、HEAD にその版のタグが付いていることを
