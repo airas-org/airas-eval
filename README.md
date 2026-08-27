@@ -1,122 +1,189 @@
 # airas-eval
 
-The trusted evaluation layer for [AIRAS](https://github.com/airas-org/airas):
-agents pass a task type and raw predictions, and get the full fixed set of
-standard metrics back. Agents never implement evaluation scripts and never
-choose which metrics (or which variants) get reported.
+[AIRAS](https://github.com/airas-org/airas) のための信頼できる評価層。
+エージェントはタスクタイプと生の予測結果を渡し、その研究種別で報告すべき標準的な
+評価指標一式を固定された形で受け取る。エージェントは評価スクリプトを実装せず、
+どの指標を(どの variant で)報告するかも選ばない。
 
-## Structure
+## 構成
 
-Two layers, and nothing a caller can choose between them:
+2 層構造で、その間に呼び出し側が選べるものはない。
 
-1. **`metrics/`** — metric implementations, one module per input shape, no
-   task knowledge. Delegated to scikit-learn / scipy wherever a canonical
-   implementation exists; in-house only where none does (ECE, regret,
-   top-k selection, 2-D hypervolume, IGD/GD/spacing), pinned and
-   property-tested.
-2. **`tasks/`** — one sub-package per area, one module per task type. A task
-   type is the full set of metrics a study of that kind must report (5–12
-   of them, scalar or curve, each with its variant pinned), computed from
-   one validated input group. `generic/` holds the core evaluation families; an area package
-   (`nas/`) builds on them — its bundles are *the core bindings plus what
-   that area's literature adds*, never a renamed copy. The reusable pieces
-   (`tasks/_bundles.py`, `tasks/nas/_bundles.py`) are plain constants: not
-   registered, not evaluable on their own.
+1. **`metrics/`** — 評価指標の実装。入力の形ごとに 1 モジュールで、タスクの知識を
+   持たない。標準実装(scikit-learn / scipy)があるものはそれに委譲し、存在しない
+   もの(ECE、リグレット、上位 k 選択、2 目的ハイパーボリューム、IGD/GD/spacing)
+   だけを自前で実装して variant を固定し、性質テストで検証している。
+2. **`tasks/`** — エリアごとに 1 サブパッケージ、タスクタイプごとに 1 モジュール。
+   タスクタイプとは「その種類の研究が報告すべき指標の全集合」で、検証済みの入力
+   グループから計算される(グループあたり 5〜12 指標、スカラーまたは曲線、variant は
+   すべて固定)。`generic/` が基本となる評価ファミリー、エリアパッケージ(`nas/`)
+   はその上に積む — エリアのバンドルは *基本のバインディング + その分野の文献が
+   追加するもの* であり、名前を変えた複製ではない。再利用部品
+   (`tasks/_bundles.py`, `tasks/nas/_bundles.py`)は単なる定数で、登録も単独評価も
+   されない。
 
 ```
 tasks/
 ├── generic/   classification, binary_classification, search, candidate_ranking, multiobjective
-└── nas/       nas_search       = search + wall-clock axis, search-space position,
-               │                  random-search baseline, test regret
-               ├── nas_architecture = classification + random-architecture baseline (Yang et al. 2020)
-               └── nas_predictor    = candidate_ranking + top-10% rank correlation (NAS-Bench-Suite-Zero)
+└── nas/       nas_pre_training  = search(+ wall-clock 軸、探索空間内順位、ランダム探索
+               │                    ベースライン)と predictor(candidate_ranking + 上位 10% 相関)
+               └── nas_post_training = architecture(classification + ランダムアーキテクチャ比、
+                                    テストリグレット)と tradeoff(multiobjective)
 ```
 
-## What does each task return?
+NAS は「アーキテクチャの性能をいつ測るか」で 2 タスクに分かれる:
 
-Two sources, both derived from the registry so they cannot drift from
-behavior:
+| タスクタイプ | 測るもの | グループ |
+|---|---|---|
+| `nas_pre_training` | 学習前のアーキテクチャ性能 — ベンチマーク参照による探索、性能予測器、ゼロコストプロキシ | `search`(任意)、`predictor`(任意)。少なくとも 1 つ |
+| `nas_post_training` | 学習後のアーキテクチャ性能 — 選ばれて学習された最終アーキテクチャ | `architecture`(必須)、`tradeoff`(任意) |
+
+## 各タスクは何を返すか(指標の説明)
+
+どちらも登録情報から導出されるので、実装と食い違うことがない:
 
 ```bash
-airas-eval list                # every task type: inputs, metrics, curves, summary, signature
-airas-eval list nas_search     # one task type
+airas-eval list                    # 全タスクタイプ: 入力、指標、曲線、入力サイズ、署名
+airas-eval list nas_post_training  # 1 タスクタイプ
 ```
 
-and a generated README per area, checked by the test suite:
-[`tasks/generic/README.md`](src/airas_eval/tasks/generic/README.md),
-[`tasks/nas/README.md`](src/airas_eval/tasks/nas/README.md).
-Regenerate with `python -m airas_eval.tasks.readme` after changing a task or
-bundle.
+および、エリアごとに生成される README(テストで同期を検証):
 
-## Usage
+- [`tasks/generic/README.md`](src/airas_eval/tasks/generic/README.md) — 汎用の評価ファミリー
+- [`tasks/nas/README.md`](src/airas_eval/tasks/nas/README.md) — NAS の 2 タスク
+
+**各指標の説明(定義、読み方、高低どちらが良いか)はこれらの README の表に載っている。**
+タスクやバンドルを変更したら `python -m airas_eval.tasks.readme` で再生成する。
+
+## 使い方
 
 ```python
 from airas_eval import evaluate
 
 report = evaluate(
-    "nas_search",
-    {"main": {"evaluated_scores": scores_in_order, "oracle_best": 94.37}},
+    "nas_post_training",
+    {
+        "architecture": {
+            "predicted_labels": y_pred,
+            "reference_labels": y_true,
+            "probabilities": probs,  # 任意
+            "oracle_test_best": 0.9437,  # 任意: ベンチマークのテスト最適値(0〜1)
+        },
+        "tradeoff": {  # 任意グループ
+            "points": [[error, macs], ...],  # 全目的を最小化
+            "reference_point": [0.2, 1e9],
+        },
+    },
 )
-report.metrics  # scalar metrics: {"main.best_score": ..., "main.final_regret": ..., ...}
-report.curves  # non-scalar metrics: {"main.best_so_far": [...]}
-report.inputs_summary  # NOT metrics — input sizes: {"main.n_evaluations": 200}
-report.skipped  # what didn't apply — machine-readable code + reason
-report.omitted_optional_inputs  # e.g. ["main.oracle_best"]
-report.provenance  # derived task signature, versions, input SHA-256
+report.metrics  # スカラー指標: {"architecture.accuracy": ..., "tradeoff.hypervolume_2d": ...}
+report.curves  # 曲線指標: {"tradeoff.pareto_front": [...]}
+report.inputs_summary  # 指標ではない — 入力サイズ: {"architecture.n_examples": 10000, ...}
+report.skipped  # 計算できなかった指標 — 機械可読なコード + 理由
+report.omitted_optional_inputs  # 例: ["architecture.random_architecture_accuracies"]
+report.provenance  # 導出されたタスク署名、依存パッケージの版、入力の SHA-256
 ```
 
 ```bash
-airas-eval score nas_search --inputs inputs.json --output evaluation.json
+airas-eval score nas_pre_training --inputs inputs.json --output evaluation.json
 ```
 
-`examples/` holds a minimal input file per NAS task; the test suite scores
-each of them through the CLI. NAS-specific inputs (`evaluation_costs`,
-`search_space_scores`, `random_architecture_accuracies`, ...) are optional
-reference data: leave them out and the metrics that need them are reported
-as skipped, with the omission listed.
+`examples/` に NAS 各タスクの最小入力ファイルがあり、テストスイートがそれぞれを CLI
+で採点する。NAS 固有の入力(`evaluation_costs`, `search_space_scores`,
+`random_architecture_accuracies`, `oracle_test_best`, ...)は任意の参照データで、
+省略するとそれを必要とする指標は skipped として報告され、省略自体も記録される。
 
-Inputs are always grouped (`{"main": {...}}`); a task type is the only thing
-the caller chooses, and which task type a study is evaluated as belongs to
-the research plan, not to the evaluation step.
+入力は常にグループ化されている(`{"architecture": {...}}`)。呼び出し側が選べるのは
+タスクタイプだけで、研究をどのタスクタイプで評価するかは研究計画側が決める
+(評価ステップではない)。NAS では、探索ステージの後に `nas_pre_training`、
+最終アーキテクチャの学習後に `nas_post_training` を呼ぶ、というパイプラインの段階が
+それに対応する。
 
-## Design rules
+## 設計ルール
 
-1. **No metric choice.** A task type computes *all* its metrics; the set is
-   fixed and small enough to read, because a long list is its own kind of
-   cherry-picking surface. Variants (averaging, k, bins) are pinned per
-   task, and every parameter a metric function takes must be pinned
-   explicitly (enforced by test). Input sizes (`n_examples`,
-   `n_evaluations`, ...) are reported under `inputs_summary`, apart from
-   metrics, so a subsetted test set or a truncated run is visible.
-2. **Nothing disappears silently.** A metric that cannot be computed appears
-   under `skipped` with a machine-readable code (`missing_optional_input`,
-   `not_applicable`, `undefined_on_data`, `missing_dependency`); omitted
-   optional inputs are surfaced per report.
-   Only these dedicated cases become skips — malformed inputs and library
-   bugs raise instead of hiding as "undefined".
-3. **Provenance is derived, never hand-written.** The task signature is a
-   hash of the task's declaration (metric names, function identities,
-   pinned kwargs, input fields), so it cannot drift from behavior. The
-   per-area READMEs are generated from the same declaration.
-4. **Reference data is fixed upstream.** `reference_labels`, `oracle_best`,
-   and reference points/fronts belong to the experimental design. This
-   library cannot verify they are genuine, and cannot defend itself inside
-   an agent-controlled process — run `airas-eval score` from a pinned
-   environment the agent cannot edit.
+1. **指標を選ばせない。** タスクタイプは自分の指標を*すべて*計算する。集合は固定で、
+   読み切れる大きさに保つ(長い一覧はそれ自体がチェリーピックの余地になる)。
+   variant(平均方法、k、ビン数)はタスクごとに固定され、指標関数が取る全パラメータは
+   明示的に固定される(テストで強制)。入力サイズ(`n_examples`, `n_evaluations`, ...)
+   は指標とは別に `inputs_summary` に報告され、テスト集合の部分抽出や打ち切られた
+   探索が見えるようにする。
+2. **黙って消えるものはない。** 計算できなかった指標は `skipped` に機械可読なコード
+   (`missing_optional_input`, `not_applicable`, `undefined_on_data`,
+   `missing_dependency`)付きで現れ、省略された任意入力もレポートごとに列挙される。
+   skip になるのはこれらの専用ケースだけで、不正な入力やライブラリのバグは
+   「未定義」に隠れず例外で失敗する。
+3. **来歴は手書きせず導出する。** タスク署名はタスク宣言(指標名、関数の識別子、
+   固定 kwargs、入力フィールド)のハッシュなので、実装と乖離できない。エリアごとの
+   README も同じ宣言から生成される。
+4. **参照データは上流で固定する。** `reference_labels`、`oracle_best`、
+   `oracle_test_best`、参照点・参照フロントは実験設計に属する。このライブラリはそれ
+   らが本物であることを検証できず、エージェントが制御するプロセスの中では自衛でき
+   ない — `airas-eval score` をエージェントが編集できない固定環境から実行すること。
 
-## Install
-
-Not on PyPI yet. Pin a tag so the evaluation layer cannot change under a
-study:
+## インストール
 
 ```bash
-uvx --from git+https://github.com/airas-org/airas-eval@v0.2.0 airas-eval list
-uv add "airas-eval @ git+https://github.com/airas-org/airas-eval@v0.2.0"
+uv add "airas-eval==0.3.0"     # ライブラリ/CLI として
+uvx airas-eval@0.3.0 list      # インストールせずに CLI だけ使う
 ```
 
-Dependencies: numpy, scikit-learn, scipy, pydantic.
+評価層が研究の途中で変わらないように、必ずバージョンを固定する。依存: numpy,
+scikit-learn, scipy, pydantic。
 
-## Development
+## 研究リポジトリからの呼び出し方
+
+agent の実験コードは **airas_eval を import しない**。agent の成果物は評価の
+**入力ファイル**(`evaluate` に渡す dict をそのまま JSON にしたもの)までで、評価は
+固定版の CLI を別プロセスで走らせる。研究リポジトリには airas(オーケストレータ)の
+テンプレート由来で次が置かれる:
+
+```toml
+# pyproject.toml — 依存として固定するが、実験コードからは import しない
+[dependency-groups]
+eval = ["airas-eval==0.3.0"]
+```
+
+```makefile
+# Makefile — task_type と入出力先は研究計画から埋める
+evaluate:
+	uv run --group eval airas-eval score nas_pre_training \
+	    --inputs artifacts/eval_inputs/nas_pre_training.json \
+	    --output artifacts/evaluation/nas_pre_training.json
+	uv run --group eval airas-eval score nas_post_training \
+	    --inputs artifacts/eval_inputs/nas_post_training.json \
+	    --output artifacts/evaluation/nas_post_training.json
+```
+
+agent は `make evaluate` を実行してスコアを確認しながら実験を進めてよい。ただし
+Makefile は agent が書き換え得るので、**公式のスコアはオーケストレータが agent の
+触れない環境で、同じ版の CLI を入力ファイルに直接かけて再計算したもの**とする。
+report の `inputs_sha256` と入力ファイルの hash、`provenance.versions` の版を照合すれば、
+どの入力をどの版で採点したかが確認できる。第三者は clone → `uv sync --group eval` →
+`make evaluate` で同じ数字を再現できる(`uv.lock` が版を固定する)。
+
+## リリース手順
+
+公開は GitHub Actions の `publish.yml`(PyPI Trusted Publisher、API トークン不要)で行う。
+
+初回のみ、PyPI 側の設定が必要:
+
+1. https://pypi.org/manage/account/publishing/ で **pending publisher** を登録する —
+   PyPI project name `airas-eval`、owner `airas-org`、repository `airas-eval`、
+   workflow `publish.yml`、environment `pypi`。
+2. GitHub リポジトリの Settings → Environments に `pypi` を作る(承認者を付けてもよい)。
+
+毎回のリリース:
+
+```bash
+uv version --bump minor          # pyproject と __init__ の版を揃える(現状は手動で両方)
+uv lock && uv run pytest -q
+git commit -am "release: v0.3.0" && git tag v0.3.0 && git push --tags
+```
+
+その後 Actions から `Publish` を手動実行する(HEAD にその版のタグが付いていることを
+ワークフローが検証する)。Trusted Publisher が動くことを確認したら、`publish.yml` の
+トリガーを `push: tags: ["v*"]` に切り替えてタグ push だけで公開できるようにする。
+
+## 開発
 
 ```bash
 uv sync
@@ -126,18 +193,17 @@ uv run mypy src
 uv run pytest
 ```
 
-Adding a task type = one module under `tasks/<area>/` defining `TASK` from
-an existing bundle, one line in the area's `TASKS`, then
-`python -m airas_eval.tasks.readme`. A new area = a new sub-package plus one
-line in `tasks.AREAS`. Adding a bundle = an input model in `tasks/_inputs.py`
-and a `Bundle` in `tasks/_bundles.py` with a `summary` count. Keep tasks at
-roughly 5–10 metrics: standard variants only, one pin per parameter.
+タスクタイプの追加 = `tasks/<area>/` に既存バンドルから `TASK` を定義するモジュールを
+1 つ置き、エリアの `TASKS` に 1 行足し、`python -m airas_eval.tasks.readme` を実行。
+新しいエリア = 新しいサブパッケージ + `tasks.AREAS` に 1 行。バンドルの追加 =
+`tasks/_inputs.py` の入力モデルと `tasks/_bundles.py` の `Bundle`(`summary` の件数
+付き)。各バインディングには日本語の `description` が必須(テストで強制)。タスクは
+5〜10 指標程度に保つ: 標準的な variant のみ、パラメータごとに 1 つの固定値。
 
-Registration is deliberately explicit (no entry points, no scanning): in a
-trust layer, what gets computed must be visible in a reviewed diff. New
-in-house metrics need parity tests against an oracle implementation, or
-hand-computed cases plus property tests.
+登録は意図的に明示的(entry point もスキャンもしない): 信頼層では、何が計算される
+かがレビュー済みの差分に見えていなければならない。自前実装の指標を追加する場合は、
+オラクル実装とのパリティテスト、または手計算ケース + 性質テストが必要。
 
-## License
+## ライセンス
 
 MIT

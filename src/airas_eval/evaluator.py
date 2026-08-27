@@ -101,6 +101,11 @@ def _validate_groups(task: TaskSpec, inputs: dict[str, Any]) -> dict[str, Any]:
             f"invalid inputs for task {task.task_type!r}: required group(s) "
             f"{missing} are missing"
         )
+    if all(inputs.get(g.name) is None for g in task.groups):
+        raise ValueError(
+            f"invalid inputs for task {task.task_type!r}: at least one of the "
+            f"groups {sorted(declared)} must be provided"
+        )
     data: dict[str, Any] = {}
     for group in task.groups:
         raw = inputs.get(group.name)

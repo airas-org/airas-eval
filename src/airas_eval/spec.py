@@ -6,7 +6,7 @@ Two public layers only:
 * ``tasks/`` — a task type is the full set of metrics a study of that kind
   must report, declared as named *input groups*. Each group binds a pydantic
   input model to metric bindings; a group is either required or optional.
-  ``evaluate("nas_search", {"main": {...}})``.
+  ``evaluate("nas_post_training", {"architecture": {...}})``.
 
 The reusable building block between them is a :class:`Bundle` (e.g. "the
 classification metrics"). Bundles are plain module constants: they are not
@@ -58,6 +58,7 @@ class MetricBinding:
     fn: Callable[..., Any]
     inputs: tuple[str, ...]
     kwargs: dict[str, Any] = field(default_factory=dict)
+    description: str = ""  # human-readable (Japanese); not part of the signature
 
     def declaration(self) -> dict[str, Any]:
         return {
@@ -96,6 +97,8 @@ class Bundle:
             )
         model_fields = set(self.input_model.model_fields)
         for binding in self.bindings:
+            if not binding.description.strip():
+                raise ValueError(f"{binding.name}: every binding needs a description")
             if "<lambda>" in getattr(binding.fn, "__qualname__", "<lambda>"):
                 raise ValueError(
                     f"{binding.name}: bindings must reference named module-level "
@@ -154,7 +157,8 @@ class Group:
 class TaskSpec:
     """The full metric contract for one task type: an ordered set of groups.
 
-    Metric names in the report are ``<group>.<metric>``.
+    Metric names in the report are ``<group>.<metric>``. A task may declare
+    only optional groups; the evaluator then requires at least one of them.
     """
 
     task_type: str
@@ -172,8 +176,6 @@ class TaskSpec:
         for name in names:
             if not name.isidentifier():
                 raise ValueError(f"group name {name!r} must be an identifier")
-        if not any(g.required for g in self.groups):
-            raise ValueError(f"task {self.task_type!r} has no required group")
 
     def group(self, name: str) -> Group:
         for g in self.groups:

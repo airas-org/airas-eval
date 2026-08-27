@@ -17,19 +17,21 @@ def _task(metrics: tuple[MetricBinding, ...]) -> TaskSpec:
 
 
 def test_signature_is_derived_and_stable():
-    a = _task((MetricBinding("mse", _reg.mse, _PAIR),))
-    b = _task((MetricBinding("mse", _reg.mse, _PAIR),))
+    a = _task((MetricBinding("mse", _reg.mse, _PAIR, {}, description="t"),))
+    b = _task((MetricBinding("mse", _reg.mse, _PAIR, {}, description="t"),))
     assert a.signature() == b.signature()
     assert a.signature().startswith("test_task/v1@")
 
 
 def test_signature_changes_with_kwargs_bindings_and_groups():
-    base = _task((MetricBinding("m", _reg.mape, _PAIR),))
-    other_fn = _task((MetricBinding("m", _reg.smape, _PAIR),))
-    with_kwargs = _task((MetricBinding("m", _reg.mape, _PAIR, {"variant": 2}),))
+    base = _task((MetricBinding("m", _reg.mape, _PAIR, {}, description="t"),))
+    other_fn = _task((MetricBinding("m", _reg.smape, _PAIR, {}, description="t"),))
+    with_kwargs = _task(
+        (MetricBinding("m", _reg.mape, _PAIR, {"variant": 2}, description="t"),)
+    )
     assert base.signature() != other_fn.signature()
     assert base.signature() != with_kwargs.signature()
-    bundle = _bundle((MetricBinding("m", _reg.mape, _PAIR),))
+    bundle = _bundle((MetricBinding("m", _reg.mape, _PAIR, {}, description="t"),))
     renamed = TaskSpec("test_task", (Group("other", bundle),))
     optional = TaskSpec(
         "test_task", (Group("main", bundle), Group("extra", bundle, required=False))
@@ -38,22 +40,37 @@ def test_signature_changes_with_kwargs_bindings_and_groups():
     assert base.signature() != optional.signature()
 
 
+def test_bindings_need_a_description():
+    with pytest.raises(ValueError, match="needs a description"):
+        _bundle((MetricBinding("m", _reg.mse, _PAIR),))
+
+
 def test_lambdas_are_rejected():
     with pytest.raises(ValueError, match="lambda"):
-        _bundle((MetricBinding("m", lambda a, b: 0.0, _PAIR),))
+        _bundle((MetricBinding("m", lambda a, b: 0.0, _PAIR, {}, description="t"),))
 
 
 def test_unknown_binding_inputs_are_rejected():
     with pytest.raises(ValueError, match="not present"):
-        _bundle((MetricBinding("m", _reg.mse, ("no_such_field", "also_missing")),))
+        _bundle(
+            (
+                MetricBinding(
+                    "m",
+                    _reg.mse,
+                    ("no_such_field", "also_missing"),
+                    {},
+                    description="t",
+                ),
+            )
+        )
 
 
 def test_duplicate_metric_names_are_rejected():
     with pytest.raises(ValueError, match="duplicate"):
         _bundle(
             (
-                MetricBinding("m", _reg.mse, _PAIR),
-                MetricBinding("m", _reg.mae, _PAIR),
+                MetricBinding("m", _reg.mse, _PAIR, {}, description="t"),
+                MetricBinding("m", _reg.mae, _PAIR, {}, description="t"),
             )
         )
 
@@ -66,8 +83,8 @@ def test_task_declaration_is_validated():
         TaskSpec("t", (Group("a", bundle), Group("a", bundle)))
     with pytest.raises(ValueError, match="identifier"):
         TaskSpec("t", (Group("bad-name", bundle),))
-    with pytest.raises(ValueError, match="no required group"):
-        TaskSpec("t", (Group("a", bundle, required=False),))
+    # all-optional groups are allowed; the evaluator requires at least one
+    TaskSpec("t", (Group("a", bundle, required=False),))
 
 
 def test_registered_tasks_have_distinct_signatures():
@@ -77,12 +94,12 @@ def test_registered_tasks_have_distinct_signatures():
 
 def test_nas_bundles_extend_the_core_bindings_verbatim():
     pairs = {
-        "nas_search": "search",
-        "nas_architecture": "classification",
-        "nas_predictor": "candidate_ranking",
+        ("nas_pre_training", "search"): "search",
+        ("nas_pre_training", "predictor"): "candidate_ranking",
+        ("nas_post_training", "architecture"): "classification",
     }
-    for nas_task, generic_task in pairs.items():
-        nas = TASKS[nas_task].group("main").bundle
+    for (nas_task, group), generic_task in pairs.items():
+        nas = TASKS[nas_task].group(group).bundle
         core = TASKS[generic_task].group("main").bundle
         assert nas.metrics[: len(core.metrics)] == core.metrics
         assert nas.curves[: len(core.curves)] == core.curves

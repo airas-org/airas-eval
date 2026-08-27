@@ -61,7 +61,7 @@ def test_every_nas_task_has_an_example():
 def test_invalid_inputs_fail_nonzero(tmp_path: Path):
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"evaluated_scores": [1.0]}))  # ungrouped
-    out = _run("score", "nas_search", "--inputs", str(bad))
+    out = _run("score", "nas_pre_training", "--inputs", str(bad))
     assert out.returncode != 0
     assert "unknown group" in out.stderr
     assert _run("score", "no_such_task", "--inputs", str(bad)).returncode != 0

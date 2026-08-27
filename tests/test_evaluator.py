@@ -184,82 +184,126 @@ NAS_SEARCH_FULL = {
     **SEARCH_FULL,
     "evaluation_costs": [100.0, 200.0, 100.0, 300.0],
     "search_space_scores": [80.0, 88.0, 90.0, 91.2, 93.1, 94.37, 85.0, 70.0],
-    "final_test_score": 92.5,
-    "oracle_test_best": 94.0,
 }
 
 
 def test_nas_tasks_are_supersets_of_generic_tasks():
     pairs = {
-        "nas_search": ("search", SEARCH_FULL),
-        "nas_architecture": ("classification", CLS_FULL),
-        "nas_predictor": ("candidate_ranking", RANK_SMALL),
+        ("nas_pre_training", "search"): ("search", SEARCH_FULL),
+        ("nas_pre_training", "predictor"): ("candidate_ranking", RANK_SMALL),
+        ("nas_post_training", "architecture"): ("classification", CLS_FULL),
     }
-    for nas_task, (generic_task, inputs) in pairs.items():
-        a = evaluate(nas_task, {"main": inputs})
+    for (nas_task, group), (generic_task, inputs) in pairs.items():
+        a = evaluate(nas_task, {group: inputs})
         b = evaluate(generic_task, {"main": inputs})
+        prefix = len("main.")
         # same numbers for the shared metrics ...
-        assert all(a.metrics[k] == b.metrics[k] for k in b.metrics)
+        assert all(
+            a.metrics[f"{group}.{k[prefix:]}"] == v for k, v in b.metrics.items()
+        )
         # ... and the NAS extras exist in the report as coded skips, since the
         # generic inputs carry none of the NAS reference data
-        declared_a = set(a.metrics) | set(a.skipped)
+        declared_a = {k for k in set(a.metrics) | set(a.skipped) if k.startswith(group)}
         declared_b = set(b.metrics) | set(b.skipped)
-        assert declared_a > declared_b, nas_task
-        # NAS-specific blocks were not provided: reported, not silently absent
+        assert len(declared_a) > len(declared_b), nas_task
         assert a.provenance["task_signature"].startswith(f"{nas_task}/v1@")
 
 
-def test_nas_search_specific_metrics():
-    report = evaluate("nas_search", {"main": NAS_SEARCH_FULL})
+def test_nas_pre_training_requires_at_least_one_group():
+    with pytest.raises(ValueError, match="at least one of the groups"):
+        evaluate("nas_pre_training", {})
+    report = evaluate("nas_pre_training", {"predictor": RANK_SMALL})
+    assert "search" in report.omitted_optional_inputs
+    assert report.skipped["search.best_score"]["code"] == "missing_optional_input"
+
+
+def test_nas_pre_training_search_specific_metrics():
+    report = evaluate("nas_pre_training", {"search": NAS_SEARCH_FULL})
     m = report.metrics
-    assert m["main.cost_to_best"] == 700.0
-    assert m["main.search_space_fraction_better"] == pytest.approx(1 / 8)
-    assert m["main.test_regret"] == pytest.approx(1.5)
-    assert m["main.gain_over_random_search"] > 0  # beat a 4-draw random baseline
-    assert m["main.relative_improvement_over_random"] == pytest.approx(
+    assert m["search.cost_to_best"] == 700.0
+    assert m["search.search_space_fraction_better"] == pytest.approx(1 / 8)
+    assert m["search.gain_over_random_search"] > 0  # beat a 4-draw random baseline
+    assert m["search.relative_improvement_over_random"] == pytest.approx(
         (93.1 - 86.45875) / 86.45875
     )
-    assert report.curves["main.best_so_far_vs_cost"][-1] == [700.0, 93.1]
-    assert report.inputs_summary["main.total_cost"] == 700.0
-    assert report.inputs_summary["main.n_search_space"] == 8
-    assert report.omitted_optional_inputs == []
+    assert report.curves["search.best_so_far_vs_cost"][-1] == [700.0, 93.1]
+    assert report.inputs_summary["search.total_cost"] == 700.0
+    assert report.inputs_summary["search.n_search_space"] == 8
+    assert report.omitted_optional_inputs == ["predictor"]
     with pytest.raises(ValueError, match="one entry per evaluated score"):
         evaluate(
-            "nas_search",
-            {"main": {**SEARCH_FULL, "evaluation_costs": [1.0]}},
+            "nas_pre_training",
+            {"search": {**SEARCH_FULL, "evaluation_costs": [1.0]}},
         )
-    with pytest.raises(ValueError, match="given together"):
-        evaluate("nas_search", {"main": {**SEARCH_FULL, "final_test_score": 1.0}})
 
 
-def test_nas_architecture_random_baseline():
-    inputs = {**CLS_NO_PROBS, "random_architecture_accuracies": [0.2, 0.3, 0.4]}
-    report = evaluate("nas_architecture", {"main": inputs})
-    acc = report.metrics["main.accuracy"]
-    assert report.metrics["main.relative_improvement_over_random"] == pytest.approx(
-        (acc - 0.3) / 0.3
-    )
-    assert report.metrics["main.fraction_of_random_better"] == 0.0
-    assert report.inputs_summary["main.n_random_architectures"] == 3
+def test_nas_post_training_architecture_baselines():
+    inputs = {
+        **CLS_NO_PROBS,
+        "random_architecture_accuracies": [0.2, 0.3, 0.4],
+        "oracle_test_best": 0.95,
+    }
+    report = evaluate("nas_post_training", {"architecture": inputs})
+    acc = report.metrics["architecture.accuracy"]
+    assert report.metrics[
+        "architecture.relative_improvement_over_random"
+    ] == pytest.approx((acc - 0.3) / 0.3)
+    assert report.metrics["architecture.fraction_of_random_better"] == 0.0
+    assert report.metrics["architecture.test_regret"] == pytest.approx(0.95 - acc)
+    assert report.inputs_summary["architecture.n_random_architectures"] == 3
+    assert "tradeoff" in report.omitted_optional_inputs
     with pytest.raises(ValueError, match=r"\[0, 1\]"):
         evaluate(
-            "nas_architecture",
-            {"main": {**CLS_NO_PROBS, "random_architecture_accuracies": [70.0]}},
+            "nas_post_training",
+            {
+                "architecture": {
+                    **CLS_NO_PROBS,
+                    "random_architecture_accuracies": [70.0],
+                }
+            },
+        )
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        evaluate(
+            "nas_post_training",
+            {"architecture": {**CLS_NO_PROBS, "oracle_test_best": 94.0}},
+        )
+    with pytest.raises(ValueError, match="exceeds the benchmark optimum"):
+        evaluate(
+            "nas_post_training",
+            {"architecture": {**CLS_NO_PROBS, "oracle_test_best": 0.0}},
         )
 
 
-def test_nas_predictor_top_fraction_correlations():
+def test_nas_post_training_tradeoff_group():
+    report = evaluate(
+        "nas_post_training",
+        {
+            "architecture": CLS_NO_PROBS,
+            "tradeoff": {
+                "points": [[0.1, 5.0], [0.2, 2.0], [0.3, 4.0]],
+                "reference_point": [1.0, 10.0],
+            },
+        },
+    )
+    assert report.metrics["tradeoff.hypervolume_2d"] == pytest.approx(6.9)
+    assert report.curves["tradeoff.pareto_front"] == [[0.1, 5.0], [0.2, 2.0]]
+    with pytest.raises(ValueError, match="required group"):
+        evaluate("nas_post_training", {"tradeoff": {"points": [[0.1, 1.0]]}})
+
+
+def test_nas_pre_training_predictor_top_fraction_correlations():
     ref = [float(i) for i in range(40)]
     pred = ref[:]
     pred[35], pred[39] = pred[39], pred[35]  # swap two of the true top-10%
     report = evaluate(
-        "nas_predictor", {"main": {"predicted_scores": pred, "reference_scores": ref}}
+        "nas_pre_training",
+        {"predictor": {"predicted_scores": pred, "reference_scores": ref}},
     )
     assert (
-        report.metrics["main.kendall_tau"]
-        > report.metrics["main.kendall_tau_top_10pct"]
+        report.metrics["predictor.kendall_tau"]
+        > report.metrics["predictor.kendall_tau_top_10pct"]
     )
-    assert report.metrics["main.spearman_rho_top_10pct"] < 1.0
+    assert report.metrics["predictor.spearman_rho_top_10pct"] < 1.0
 
 
 def test_provenance_signature_and_hashes():
@@ -310,11 +354,12 @@ def test_every_task_reports_input_sizes_outside_metrics():
             )
 
 
-def test_every_task_is_between_five_and_twelve_metrics():
+def test_every_group_is_between_five_and_twelve_metrics():
     # curves are metrics too (non-scalar); summary entries are not
     for task_type, task in TASKS.items():
-        n = sum(len(g.bundle.metrics) + len(g.bundle.curves) for g in task.groups)
-        assert 5 <= n <= 12, (task_type, n)
+        for group in task.groups:
+            n = len(group.bundle.metrics) + len(group.bundle.curves)
+            assert 5 <= n <= 12, (task_type, group.name, n)
 
 
 def test_version_comes_from_installed_metadata():

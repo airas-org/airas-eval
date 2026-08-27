@@ -1,5 +1,0 @@
-{"main": {"evaluated_scores": [88.0, 91.2, 90.0, 93.1, 92.4],
-          "evaluation_costs": [1200.0, 1350.0, 1100.0, 1500.0, 1400.0],
-          "oracle_best": 94.37,
-          "search_space_scores": [70.1, 85.3, 88.0, 90.0, 91.2, 92.4, 93.1, 93.9, 94.37, 60.2, 82.7, 89.5],
-          "final_test_score": 92.8, "oracle_test_best": 94.0}}
