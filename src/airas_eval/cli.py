@@ -2,9 +2,10 @@
 
 Agents interact with airas-eval only through files and this CLI:
 
-* ``list``      what each task type computes (fixed; nothing to choose);
-                ``--json`` for the machine-readable contract
-* ``schema``    the JSON Schema of a task type's inputs file (what to produce)
+* ``list``      index of task types; ``list <task> [<task> ...]`` or
+                ``list --all`` for full details; ``--json`` for machine-readable
+* ``schema``    the JSON Schema of a task type's inputs file (what to produce);
+                several names or ``--all`` give ``{task_type: schema}``
 * ``validate``  check an inputs file against that contract, without scoring
 * ``score``     compute the full metric set for one inputs file
 * ``aggregate`` mean ± std over several reports (e.g. seeds)
@@ -79,11 +80,24 @@ _KIND_HEADERS = (
 )
 
 
-def _print_list(only: str | None) -> None:
+def _print_index() -> None:
+    """One line per task type: name, signature, first sentence, metric count."""
+    width = max(len(t) for t in TASKS)
     for task_type, task in sorted(TASKS.items()):
-        if only and task_type != only:
-            continue
         info = task.describe()
+        n = len(info["metrics"])
+        print(
+            f"{task_type + ':':<{width + 1}}  [{info['signature']}]  "
+            f"{_short(info['description'], 40)}  ({n} 指標)"
+        )
+    print()
+    print("詳細: airas-eval list <task_type> [<task_type> ...]")
+    print("全件: airas-eval list --all")
+
+
+def _print_details(task_types: list[str]) -> None:
+    for task_type in task_types:
+        info = TASKS[task_type].describe()
         print(f"{task_type}:  [{info['signature']}]")
         if info["description"]:
             print(f"  {_short(info['description'], 80)}")
@@ -126,14 +140,29 @@ def main() -> None:
     parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_list = sub.add_parser("list", help="list task types and their metrics")
-    p_list.add_argument("task_type", nargs="?", help="show one task type only")
+    p_list = sub.add_parser(
+        "list", help="task types (no args: index only; with names: full details)"
+    )
+    p_list.add_argument(
+        "task_types",
+        nargs="*",
+        choices=[*sorted(TASKS), []],
+        help="task types to detail",
+    )
+    p_list.add_argument(
+        "--all", action="store_true", help="details for every task type"
+    )
     p_list.add_argument(
         "--json", action="store_true", help="machine-readable: {task_type: contract}"
     )
 
-    p_schema = sub.add_parser("schema", help="JSON Schema of a task type's inputs file")
-    p_schema.add_argument("task_type", choices=sorted(TASKS))
+    p_schema = sub.add_parser(
+        "schema",
+        help="JSON Schema of the inputs file; several task types or --all give "
+        "{task_type: schema}",
+    )
+    p_schema.add_argument("task_types", nargs="*", choices=[*sorted(TASKS), []])
+    p_schema.add_argument("--all", action="store_true", help="every task type")
     p_schema.add_argument("--output", help="write the schema here (default: stdout)")
 
     p_validate = sub.add_parser(
@@ -170,17 +199,36 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "list":
+        selected = sorted(TASKS) if args.all or not args.task_types else args.task_types
         if args.json:
-            selected = {
-                t: TASKS[t].describe()
-                for t in sorted(TASKS)
-                if not args.task_type or t == args.task_type
-            }
-            sys.stdout.write(json.dumps(selected, indent=2, ensure_ascii=False) + "\n")
+            if args.all or args.task_types:
+                payload: Any = {t: TASKS[t].describe() for t in selected}
+            else:  # index only
+                payload = {
+                    t: {
+                        "signature": TASKS[t].signature(),
+                        "description": TASKS[t].describe()["description"],
+                        "n_metrics": len(TASKS[t].metrics) + len(TASKS[t].curves),
+                    }
+                    for t in selected
+                }
+            sys.stdout.write(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+        elif args.all or args.task_types:
+            _print_details(selected)
         else:
-            _print_list(args.task_type)
+            _print_index()
     elif args.command == "schema":
-        schema = TASKS[args.task_type].input_schema()
+        if args.all:
+            chosen = sorted(TASKS)
+        elif args.task_types:
+            chosen = args.task_types
+        else:
+            parser.error("schema: give one or more task types, or --all")
+        schema: Any = (
+            TASKS[chosen[0]].input_schema()
+            if len(chosen) == 1 and not args.all
+            else {t: TASKS[t].input_schema() for t in chosen}
+        )
         _emit(json.dumps(schema, indent=2, ensure_ascii=False) + "\n", args.output)
     elif args.command == "validate":
         try:

@@ -43,10 +43,11 @@ NAS は「アーキテクチャの性能をいつ測るか」で 2 タスクに�
 どちらも登録情報から導出されるので、実装と食い違うことがない:
 
 ```bash
-airas-eval list                       # 全タスクタイプ: 入力、指標(説明付き)、曲線、入力サイズ、署名
-airas-eval list nas_post_training     # 1 タスクタイプ
-airas-eval list --json                # 同じ内容を dict で(プログラムから読む契約)
-airas-eval schema nas_post_training   # 入力ファイルの JSON Schema(何をどの形で出すか)
+airas-eval list                                    # タスクタイプの一覧(1 行ずつ: 名前、署名、概要、指標数)
+airas-eval list nas_pre_training nas_post_training  # 指定タスクの詳細: 入力(型・値域)、指標(値域・方向・説明)
+airas-eval list --all                              # 全タスクの詳細
+airas-eval list --json [task ...]                  # 同じ内容を dict で(プログラムから読む契約)
+airas-eval schema nas_post_training   # 入力ファイルの JSON Schema(何をどの形で出すか)。複数指定 / --all で {task: schema}
 airas-eval validate nas_post_training --inputs inputs.json   # 形式だけ検査(採点しない)
 ```
 

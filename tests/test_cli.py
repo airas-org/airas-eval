@@ -21,11 +21,27 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_list_prints_every_registered_task():
+def test_list_index_is_one_line_per_task():
     out = _run("list")
     assert out.returncode == 0, out.stderr
     for task_type in TASKS:
-        assert f"{task_type}:  [{task_type}/v" in out.stdout
+        assert f"{task_type}:" in out.stdout and f"[{task_type}/v" in out.stdout
+    assert "指標:" not in out.stdout  # no per-metric details in the index
+    assert len(out.stdout.splitlines()) < len(TASKS) + 4
+
+
+def test_list_accepts_several_task_types_and_all():
+    two = _run("list", "nas_pre_training", "nas_post_training")
+    assert two.returncode == 0, two.stderr
+    assert two.stdout.count("指標:") == 2
+    assert "classification:  [" not in two.stdout
+    everything = _run("list", "--all")
+    assert everything.stdout.count("指標:") == len(TASKS)
+    index = json.loads(_run("list", "--json").stdout)
+    assert set(index) == set(TASKS) and "metrics" not in index["search"]
+    assert index["search"]["n_metrics"] == len(TASKS["search"].metrics) + len(
+        TASKS["search"].curves
+    )
 
 
 @pytest.mark.parametrize("path", sorted(EXAMPLES.glob("*.json")), ids=lambda p: p.stem)
@@ -84,6 +100,15 @@ def test_schema_and_validate(tmp_path: Path):
     bad.write_text(json.dumps({"predicted_labels": [0]}))
     res = _run("validate", "nas_post_training", "--inputs", str(bad))
     assert res.returncode == 1 and res.stderr.startswith("INVALID:")
+
+
+def test_schema_accepts_several_task_types():
+    many = json.loads(_run("schema", "search", "candidate_ranking").stdout)
+    assert set(many) == {"search", "candidate_ranking"}
+    assert many["search"]["title"] == "search inputs"
+    everything = json.loads(_run("schema", "--all").stdout)
+    assert set(everything) == set(TASKS)
+    assert _run("schema").returncode != 0  # no task type given
 
 
 def test_aggregate_and_compare(tmp_path: Path):
