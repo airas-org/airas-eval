@@ -391,6 +391,7 @@ def test_validate_inputs_without_scoring():
 
 
 def test_input_schema_is_derived_from_the_models():
+    assert TASKS["nas_pre_training"].input_constraints()
     schema = TASKS["nas_post_training"].input_schema()
     assert schema["required"] == ["predicted_labels", "reference_labels"]
     assert schema["additionalProperties"] is False

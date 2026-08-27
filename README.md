@@ -47,13 +47,12 @@ airas-eval list                                    # タスクタイプの一覧
 airas-eval list nas_pre_training nas_post_training  # 指定タスクの詳細: 入力(型・値域)、指標(値域・方向・説明)
 airas-eval list --all                              # 全タスクの詳細
 airas-eval list --json [task ...]                  # 同じ内容を dict で(プログラムから読む契約)
-airas-eval schema nas_post_training   # 入力ファイルの JSON Schema(何をどの形で出すか)。複数指定 / --all で {task: schema}
 airas-eval validate nas_post_training --inputs inputs.json   # 形式だけ検査(採点しない)
 ```
 
-`schema` は入力検証に使うのと同じ pydantic モデルから生成されるので、agent が読む契約と
-評価器が適用する検査が食い違わない。各フィールドの説明(単位、高低どちらが良いか、
-省略時にどの指標が skipped になるか)もスキーマに含まれる。
+`list <task>` の入力欄(`name?: type` と説明、フィールド間の制約)と `list --json` の
+`input_schema`(JSON Schema)は、入力検証に使うのと同じ pydantic モデルから生成される
+ので、agent が読む契約と評価器が適用する検査が食い違わない。
 
 および、エリアごとに生成される README(テストで同期を検証):
 

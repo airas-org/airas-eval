@@ -29,7 +29,7 @@ class NasPreTrainingInputs(TaskInputs):
     予測器・ゼロコストプロキシの推定スコア。どちらか一方は必須。"""
 
     # The cross-field rule enforced by ``_consistent`` below, stated in the
-    # JSON Schema too so ``airas-eval schema`` shows it.
+    # JSON Schema too (``airas-eval list`` shows it as input constraints).
     model_config = ConfigDict(
         extra="forbid",
         json_schema_extra={

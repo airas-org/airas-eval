@@ -3,9 +3,9 @@
 Agents interact with airas-eval only through files and this CLI:
 
 * ``list``      index of task types; ``list <task> [<task> ...]`` or
-                ``list --all`` for full details; ``--json`` for machine-readable
-* ``schema``    the JSON Schema of a task type's inputs file (what to produce);
-                several names or ``--all`` give ``{task_type: schema}``
+                ``list --all`` for full details (inputs with types, cross-field
+                rules, every metric with the inputs it needs); ``--json`` adds
+                the JSON Schema of the inputs file under ``input_schema``
 * ``validate``  check an inputs file against that contract, without scoring
 * ``score``     compute the full metric set for one inputs file
 * ``aggregate`` mean ± std over several reports (e.g. seeds)
@@ -106,6 +106,8 @@ def _print_details(task_types: list[str]) -> None:
         width = max(len(h) for h in heads)
         for head, i in zip(heads, info["inputs"], strict=True):
             print(f"    {head:<{width}}  {_short(i['description'], 60)}")
+        for rule in info["input_constraints"]:
+            print(f"    * {rule}")
         rows = info["metrics"] + info["inputs_summary"] + info["per_example"]
         width = max(len(r["name"]) for r in rows)
         arrows = {"higher": "↑", "lower": "↓", "none": "–"}
@@ -157,15 +159,6 @@ def main() -> None:
     p_list.add_argument(
         "--json", action="store_true", help="machine-readable: {task_type: contract}"
     )
-
-    p_schema = sub.add_parser(
-        "schema",
-        help="JSON Schema of the inputs file; several task types or --all give "
-        "{task_type: schema}",
-    )
-    p_schema.add_argument("task_types", nargs="*", choices=[*sorted(TASKS), []])
-    p_schema.add_argument("--all", action="store_true", help="every task type")
-    p_schema.add_argument("--output", help="write the schema here (default: stdout)")
 
     p_validate = sub.add_parser(
         "validate", help="check an inputs file, without scoring"
@@ -219,19 +212,6 @@ def main() -> None:
             _print_details(selected)
         else:
             _print_index()
-    elif args.command == "schema":
-        if args.all:
-            chosen = sorted(TASKS)
-        elif args.task_types:
-            chosen = args.task_types
-        else:
-            parser.error("schema: give one or more task types, or --all")
-        schema: Any = (
-            TASKS[chosen[0]].input_schema()
-            if len(chosen) == 1 and not args.all
-            else {t: TASKS[t].input_schema() for t in chosen}
-        )
-        _emit(json.dumps(schema, indent=2, ensure_ascii=False) + "\n", args.output)
     elif args.command == "validate":
         try:
             provided = validate_inputs(args.task_type, _load(args.inputs))

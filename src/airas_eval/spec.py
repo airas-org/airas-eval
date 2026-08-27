@@ -255,10 +255,26 @@ class TaskSpec:
             "required_inputs": list(self.required_inputs()),
             "optional_inputs": list(self.optional_inputs()),
             "inputs": self.input_fields(),
+            "input_constraints": self.input_constraints(),
+            "input_schema": self.input_schema(),
             "metrics": rows("scalar", self.metrics) + rows("curve", self.curves),
             "inputs_summary": rows("input_size", self.summary),
             "per_example": rows("per_example", self.per_example),
         }
+
+    def input_constraints(self) -> list[str]:
+        """Cross-field rules of the inputs file, in words (from the JSON
+        Schema's anyOf / dependentRequired)."""
+        schema = self.input_model.model_json_schema()
+        rules: list[str] = []
+        options = [
+            " + ".join(alt.get("required", [])) for alt in schema.get("anyOf", [])
+        ]
+        if options:
+            rules.append("少なくとも一方が必須: " + " / ".join(options))
+        for key, needs in schema.get("dependentRequired", {}).items():
+            rules.append(f"{key} を与えるなら {', '.join(needs)} も必須")
+        return rules
 
     def input_schema(self) -> dict[str, Any]:
         """JSON Schema of the inputs file, generated from the same pydantic

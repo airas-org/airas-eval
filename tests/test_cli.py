@@ -83,12 +83,7 @@ def test_invalid_inputs_fail_nonzero(tmp_path: Path):
     assert _run("score", "no_such_task", "--inputs", str(bad)).returncode != 0
 
 
-def test_schema_and_validate(tmp_path: Path):
-    out = _run("schema", "nas_post_training")
-    assert out.returncode == 0, out.stderr
-    schema = json.loads(out.stdout)
-    assert schema["required"] == ["predicted_labels", "reference_labels"]
-    assert schema["additionalProperties"] is False
+def test_validate(tmp_path: Path):
     ok = _run(
         "validate",
         "nas_post_training",
@@ -102,13 +97,19 @@ def test_schema_and_validate(tmp_path: Path):
     assert res.returncode == 1 and res.stderr.startswith("INVALID:")
 
 
-def test_schema_accepts_several_task_types():
-    many = json.loads(_run("schema", "search", "candidate_ranking").stdout)
-    assert set(many) == {"search", "candidate_ranking"}
-    assert many["search"]["title"] == "search inputs"
-    everything = json.loads(_run("schema", "--all").stdout)
-    assert set(everything) == set(TASKS)
-    assert _run("schema").returncode != 0  # no task type given
+def test_list_json_carries_the_input_schema_and_constraints():
+    task = json.loads(_run("list", "--json", "nas_pre_training").stdout)[
+        "nas_pre_training"
+    ]
+    schema = task["input_schema"]
+    assert schema["additionalProperties"] is False
+    assert {"required": ["evaluated_scores"]} in schema["anyOf"]
+    assert any("少なくとも一方" in r for r in task["input_constraints"])
+    post = json.loads(_run("list", "--json", "nas_post_training").stdout)[
+        "nas_post_training"
+    ]
+    assert post["input_schema"]["required"] == ["predicted_labels", "reference_labels"]
+    assert _run("schema", "search").returncode != 0  # command removed
 
 
 def test_aggregate_and_compare(tmp_path: Path):
