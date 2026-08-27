@@ -145,6 +145,23 @@ class Bundle:
             if not f.is_required()
         )
 
+    def input_fields(self) -> list[dict[str, Any]]:
+        """Per-input name, JSON type and description, in declaration order.
+
+        Derived from the pydantic model's JSON Schema so ``list`` shows the
+        same contract that ``schema`` emits and ``validate`` enforces.
+        """
+        props = self.input_model.model_json_schema()["properties"]
+        return [
+            {
+                "name": name,
+                "type": _compact_type(props[name]),
+                "required": f.is_required(),
+                "description": f.description or "",
+            }
+            for name, f in self.input_model.model_fields.items()
+        ]
+
     def declaration(self) -> dict[str, Any]:
         return {
             "required_inputs": list(self.required_inputs()),
@@ -154,6 +171,19 @@ class Bundle:
             "summary": [b.declaration() for b in self.summary],
             "per_example": [b.declaration() for b in self.per_example],
         }
+
+
+def _compact_type(schema: dict[str, Any]) -> str:
+    """Render a JSON Schema fragment as a short type, e.g. ``number[][]``."""
+    if "anyOf" in schema:
+        options = [o for o in schema["anyOf"] if o.get("type") != "null"]
+        return " | ".join(_compact_type(o) for o in options)
+    kind = schema.get("type")
+    if kind == "array":
+        return _compact_type(schema.get("items", {})) + "[]"
+    if kind == "integer":
+        return "int"
+    return str(kind or "any")
 
 
 @dataclass(frozen=True)
@@ -248,6 +278,7 @@ class TaskSpec:
                     "notes": g.bundle.notes,
                     "required_inputs": list(g.bundle.required_inputs()),
                     "optional_inputs": list(g.bundle.optional_inputs()),
+                    "inputs": g.bundle.input_fields(),
                     "metrics": bindings(g, "scalar", g.bundle.metrics)
                     + bindings(g, "curve", g.bundle.curves),
                     "inputs_summary": bindings(g, "input_size", g.bundle.summary),

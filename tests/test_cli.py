@@ -129,11 +129,26 @@ def test_list_json_is_the_full_contract():
     kinds = {m["kind"] for g in task["groups"] for m in g["metrics"]}
     assert kinds == {"scalar", "curve"}
     assert groups["architecture"]["per_example"][0]["name"] == "architecture.correct"
+    inputs = {i["name"]: i for i in groups["architecture"]["inputs"]}
+    assert inputs["predicted_labels"] == {
+        "name": "predicted_labels",
+        "type": "int[]",
+        "required": True,
+        "description": inputs["predicted_labels"]["description"],
+    }
+    assert inputs["probabilities"]["type"] == "number[][]"
+    assert inputs["probabilities"]["required"] is False
 
 
 def test_list_human_output_has_descriptions():
     out = _run("list", "nas_pre_training")
     assert out.returncode == 0, out.stderr
     assert "グループ search(任意)" in out.stdout
-    assert "search.best_so_far" in out.stdout and "(曲線)" in out.stdout
+    assert "レポートの指標キーは search.<名前>" in out.stdout
+    assert "best_so_far " in out.stdout and "(曲線)" in out.stdout
+    assert (
+        "search.best_so_far" not in out.stdout
+    )  # group prefix shown once, not per row
+    assert "evaluated_scores: number[]" in out.stdout  # inputs carry their type
+    assert "oracle_best: number" in out.stdout and "[任意]" in out.stdout
     assert "fraction=0.1" in out.stdout  # pinned parameters are visible

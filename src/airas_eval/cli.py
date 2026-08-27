@@ -52,7 +52,7 @@ def _short(text: str, limit: int = 45) -> str:
             continue
         if out and len(out) + len(sentence) > limit:
             break
-        out += sentence + "。"
+        out += sentence if sentence.endswith(".") else sentence + "。"
     return out
 
 
@@ -73,16 +73,23 @@ def _print_list(only: str | None) -> None:
             print(f"  {_short(info['description'], 80)}")
         for group in info["groups"]:
             kind = "必須" if group["required"] else "任意"
+            prefix = group["name"] + "."
             print(f"\n  グループ {group['name']}({kind})")
-            print(f"    必須入力: {', '.join(group['required_inputs']) or '—'}")
-            print(f"    任意入力: {', '.join(group['optional_inputs']) or '—'}")
+            print(f"    レポートの指標キーは {prefix}<名前>")
+            print("    入力:")
+            width = max(len(f"{i['name']}: {i['type']}") for i in group["inputs"])
+            for i in group["inputs"]:
+                head = f"{i['name']}: {i['type']}"
+                req = "必須" if i["required"] else "任意"
+                print(f"      {head:<{width}}  [{req}] {_short(i['description'], 60)}")
             rows = group["metrics"] + group["inputs_summary"] + group["per_example"]
-            width = max(len(r["name"]) for r in rows)
+            width = max(len(r["name"]) for r in rows) - len(prefix)
             for key, header in _KIND_HEADERS:
                 if not group[key]:
                     continue
                 print(f"    {header}:")
                 for r in group[key]:
+                    name = r["name"].removeprefix(prefix)
                     tag = "  (曲線)" if r["kind"] == "curve" else ""
                     pinned = (
                         "  ["
@@ -91,10 +98,8 @@ def _print_list(only: str | None) -> None:
                         if r["pinned"]
                         else ""
                     )
-                    print(
-                        f"      {r['name']:<{width}}  {_short(r['description'])}"
-                        f"{pinned}{tag}"
-                    )
+                    desc = _short(r["description"])
+                    print(f"      {name:<{width}}  {desc}{pinned}{tag}")
         print()
 
 
