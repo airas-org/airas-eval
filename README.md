@@ -43,8 +43,9 @@ NAS は「アーキテクチャの性能をいつ測るか」で 2 タスクに�
 どちらも登録情報から導出されるので、実装と食い違うことがない:
 
 ```bash
-airas-eval list                       # 全タスクタイプ: 入力、指標、曲線、入力サイズ、署名
+airas-eval list                       # 全タスクタイプ: 入力、指標(説明付き)、曲線、入力サイズ、署名
 airas-eval list nas_post_training     # 1 タスクタイプ
+airas-eval list --json                # 同じ内容を dict で(プログラムから読む契約)
 airas-eval schema nas_post_training   # 入力ファイルの JSON Schema(何をどの形で出すか)
 airas-eval validate nas_post_training --inputs inputs.json   # 形式だけ検査(採点しない)
 ```

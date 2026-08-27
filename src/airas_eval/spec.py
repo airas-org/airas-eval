@@ -215,6 +215,48 @@ class TaskSpec:
                 seen.setdefault(package, None)
         return tuple(seen)
 
+    def describe(self) -> dict[str, Any]:
+        """Human/agent-facing description of what this task returns.
+
+        Unlike ``declaration`` this includes descriptions and notes and is
+        not hashed into the signature; it is what ``airas-eval list --json``
+        prints.
+        """
+
+        def bindings(
+            group: Group, kind: str, items: tuple[MetricBinding, ...]
+        ) -> list[dict[str, Any]]:
+            return [
+                {
+                    "name": f"{group.name}.{b.name}",
+                    "kind": kind,
+                    "description": b.description,
+                    "pinned": dict(sorted(b.kwargs.items())),
+                    "inputs": list(b.inputs),
+                }
+                for b in items
+            ]
+
+        return {
+            "task_type": self.task_type,
+            "signature": self.signature(),
+            "description": unwrap_text(self.description),
+            "groups": [
+                {
+                    "name": g.name,
+                    "required": g.required,
+                    "notes": g.bundle.notes,
+                    "required_inputs": list(g.bundle.required_inputs()),
+                    "optional_inputs": list(g.bundle.optional_inputs()),
+                    "metrics": bindings(g, "scalar", g.bundle.metrics)
+                    + bindings(g, "curve", g.bundle.curves),
+                    "inputs_summary": bindings(g, "input_size", g.bundle.summary),
+                    "per_example": bindings(g, "per_example", g.bundle.per_example),
+                }
+                for g in self.groups
+            ],
+        }
+
     def input_schema(self) -> dict[str, Any]:
         """JSON Schema of the inputs file: one object per group.
 

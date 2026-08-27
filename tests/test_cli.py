@@ -113,3 +113,27 @@ def test_aggregate_and_compare(tmp_path: Path):
         json.loads(cmp.stdout)["comparisons"]["architecture.correct"]["mean_diff"]
         == 0.0
     )
+
+
+def test_list_json_is_the_full_contract():
+    out = _run("list", "--json", "nas_post_training")
+    assert out.returncode == 0, out.stderr
+    payload = json.loads(out.stdout)
+    task = payload["nas_post_training"]
+    assert task["signature"] == TASKS["nas_post_training"].signature()
+    groups = {g["name"]: g for g in task["groups"]}
+    assert groups["architecture"]["required"] is True
+    names = {m["name"] for m in groups["architecture"]["metrics"]}
+    assert "architecture.accuracy" in names
+    assert all(m["description"] for g in task["groups"] for m in g["metrics"])
+    kinds = {m["kind"] for g in task["groups"] for m in g["metrics"]}
+    assert kinds == {"scalar", "curve"}
+    assert groups["architecture"]["per_example"][0]["name"] == "architecture.correct"
+
+
+def test_list_human_output_has_descriptions():
+    out = _run("list", "nas_pre_training")
+    assert out.returncode == 0, out.stderr
+    assert "グループ search(任意)" in out.stdout
+    assert "search.best_so_far" in out.stdout and "(曲線)" in out.stdout
+    assert "fraction=0.1" in out.stdout  # pinned parameters are visible

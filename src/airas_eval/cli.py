@@ -2,7 +2,8 @@
 
 Agents interact with airas-eval only through files and this CLI:
 
-* ``list``      what each task type computes (fixed; nothing to choose)
+* ``list``      what each task type computes (fixed; nothing to choose);
+                ``--json`` for the machine-readable contract
 * ``schema``    the JSON Schema of a task type's inputs file (what to produce)
 * ``validate``  check an inputs file against that contract, without scoring
 * ``score``     compute the full metric set for one inputs file
@@ -43,29 +44,58 @@ def _emit(payload: str, output: str | None) -> None:
         sys.stdout.write(payload)
 
 
+def _short(text: str, limit: int = 45) -> str:
+    """Leading sentences of a description, up to roughly ``limit`` characters."""
+    out = ""
+    for sentence in text.split("。"):
+        if not sentence:
+            continue
+        if out and len(out) + len(sentence) > limit:
+            break
+        out += sentence + "。"
+    return out
+
+
+_KIND_HEADERS = (
+    ("metrics", "指標"),
+    ("inputs_summary", "入力サイズ(指標ではない)"),
+    ("per_example", "事例ごとのスコア(compare 用)"),
+)
+
+
 def _print_list(only: str | None) -> None:
     for task_type, task in sorted(TASKS.items()):
         if only and task_type != only:
             continue
-
-        print(f"{task_type}:  [{task.signature()}]")
-        for group in task.groups:
-            bundle = group.bundle
-            kind = "required" if group.required else "optional"
-            print(f"  {group.name}  ({kind})")
-            print(f"    required inputs: {', '.join(bundle.required_inputs())}")
-            if bundle.optional_inputs():
-                print(f"    optional inputs: {', '.join(bundle.optional_inputs())}")
-            for binding in bundle.metrics:
-                print(f"      {group.name}.{binding.name}")
-            for binding in bundle.curves:
-                print(f"      {group.name}.{binding.name}  [curve]")
-            if bundle.summary:
-                sizes = ", ".join(f"{group.name}.{b.name}" for b in bundle.summary)
-                print(f"    input sizes (not metrics): {sizes}")
-            if bundle.per_example:
-                names = ", ".join(f"{group.name}.{b.name}" for b in bundle.per_example)
-                print(f"    per-example scores (for compare): {names}")
+        info = task.describe()
+        print(f"{task_type}:  [{info['signature']}]")
+        if info["description"]:
+            print(f"  {_short(info['description'], 80)}")
+        for group in info["groups"]:
+            kind = "必須" if group["required"] else "任意"
+            print(f"\n  グループ {group['name']}({kind})")
+            print(f"    必須入力: {', '.join(group['required_inputs']) or '—'}")
+            print(f"    任意入力: {', '.join(group['optional_inputs']) or '—'}")
+            rows = group["metrics"] + group["inputs_summary"] + group["per_example"]
+            width = max(len(r["name"]) for r in rows)
+            for key, header in _KIND_HEADERS:
+                if not group[key]:
+                    continue
+                print(f"    {header}:")
+                for r in group[key]:
+                    tag = "  (曲線)" if r["kind"] == "curve" else ""
+                    pinned = (
+                        "  ["
+                        + ", ".join(f"{k}={v}" for k, v in r["pinned"].items())
+                        + "]"
+                        if r["pinned"]
+                        else ""
+                    )
+                    print(
+                        f"      {r['name']:<{width}}  {_short(r['description'])}"
+                        f"{pinned}{tag}"
+                    )
+        print()
 
 
 def main() -> None:
@@ -75,6 +105,9 @@ def main() -> None:
 
     p_list = sub.add_parser("list", help="list task types and their metrics")
     p_list.add_argument("task_type", nargs="?", help="show one task type only")
+    p_list.add_argument(
+        "--json", action="store_true", help="machine-readable: {task_type: contract}"
+    )
 
     p_schema = sub.add_parser("schema", help="JSON Schema of a task type's inputs file")
     p_schema.add_argument("task_type", choices=sorted(TASKS))
@@ -112,7 +145,15 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "list":
-        _print_list(args.task_type)
+        if args.json:
+            selected = {
+                t: TASKS[t].describe()
+                for t in sorted(TASKS)
+                if not args.task_type or t == args.task_type
+            }
+            sys.stdout.write(json.dumps(selected, indent=2, ensure_ascii=False) + "\n")
+        else:
+            _print_list(args.task_type)
     elif args.command == "schema":
         schema = TASKS[args.task_type].input_schema()
         _emit(json.dumps(schema, indent=2, ensure_ascii=False) + "\n", args.output)
