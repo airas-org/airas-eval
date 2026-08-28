@@ -47,13 +47,26 @@ class EvaluationReport:
 
 @dataclass
 class AggregateReport:
-    """Mean ± std over repeated runs (seeds) of the same task signature."""
+    """Descriptive statistics over repeated runs (seeds) of one task signature.
+
+    ``metrics`` / ``inputs_summary``: name -> statistics dict (see
+    ``metrics.stats.summarize``: mean, std, sem, min, max, median, q25, q75,
+    ci95_low, ci95_high, n, values). ``curves``: name -> the same statistics
+    computed point-wise (each a list), plus ``values`` = one series per report.
+    ``incomplete``: names present in only some reports (-> how many) — never
+    averaged over a shifting subset. ``not_aggregated``: curves present in every
+    report that cannot be aligned point-wise (reason). ``label`` is the
+    caller-supplied name of the system these runs belong to, if any.
+    """
 
     task_type: str
+    label: str | None
     n_reports: int
-    metrics: dict[str, dict[str, float]]
-    inputs_summary: dict[str, dict[str, float]]
+    metrics: dict[str, dict[str, Any]]
+    curves: dict[str, dict[str, Any]]
+    inputs_summary: dict[str, dict[str, Any]]
     incomplete: dict[str, int]
+    not_aggregated: dict[str, str]
     provenance: dict[str, Any]
 
     def to_json(self, indent: int = 2) -> str:
@@ -238,14 +251,20 @@ def evaluate(task_type: str, inputs: dict[str, Any]) -> EvaluationReport:
     )
 
 
-def aggregate_reports(reports: Sequence[dict[str, Any]]) -> AggregateReport:
-    """Mean ± sample std per metric over repeated runs (e.g. seeds).
+def aggregate_reports(
+    reports: Sequence[dict[str, Any]], label: str | None = None
+) -> AggregateReport:
+    """Descriptive statistics per metric over repeated runs (e.g. seeds).
 
     Takes report dicts (``EvaluationReport`` as JSON). All reports must share
     one task signature — mixing versions or task types is a contract
     violation. A metric missing from some reports is listed under
     ``incomplete`` (with how many reports had it) instead of being averaged
-    over a shifting subset.
+    over a shifting subset. Curves are aggregated point-wise when every report
+    has a 1-d series of the same length; otherwise (point sets such as a Pareto
+    front, or k-sweeps of different lengths) they appear under
+    ``not_aggregated`` with the reason. ``label`` names the system (e.g.
+    ``"method_A"``) so aggregates of several systems can be told apart.
     """
     if not reports:
         raise ValueError("need at least one report to aggregate")
@@ -255,28 +274,54 @@ def aggregate_reports(reports: Sequence[dict[str, Any]]) -> AggregateReport:
             f"cannot aggregate across task signatures: {sorted(signatures)}"
         )
 
-    def _aggregate(key: str) -> tuple[dict[str, dict[str, float]], dict[str, int]]:
+    incomplete: dict[str, int] = {}
+
+    def _complete(key: str) -> dict[str, list[Any]]:
+        """name -> one value per report, for names present in every report."""
         names = sorted({name for r in reports for name in r[key]})
-        full: dict[str, dict[str, float]] = {}
-        partial: dict[str, int] = {}
+        full: dict[str, list[Any]] = {}
         for name in names:
             values = [r[key][name] for r in reports if name in r[key]]
             if len(values) != len(reports):
-                partial[name] = len(values)
-                continue
-            full[name] = _stats.mean_std(values)
-        return full, partial
+                incomplete[name] = len(values)
+            else:
+                full[name] = values
+        return full
 
-    metrics, incomplete = _aggregate("metrics")
-    summary, incomplete_summary = _aggregate("inputs_summary")
-    incomplete.update(incomplete_summary)
+    metrics = {n: _stats.summarize(v) for n, v in _complete("metrics").items()}
+    summary = {n: _stats.summarize(v) for n, v in _complete("inputs_summary").items()}
+
+    curves: dict[str, dict[str, Any]] = {}
+    not_aggregated: dict[str, str] = {}
+    for name, series in _complete("curves").items():
+        arrays = [np.asarray(c, dtype=float) for c in series]
+        if any(a.ndim != 1 for a in arrays):
+            not_aggregated[name] = "point sets are not alignable across runs"
+            continue
+        lengths = sorted({len(a) for a in arrays})
+        if len(lengths) != 1:
+            not_aggregated[name] = f"series lengths differ across runs: {lengths}"
+            continue
+        matrix = np.stack(arrays)  # reports x points
+        pointwise = [_stats.summarize(col) for col in matrix.T]
+        curves[name] = {
+            stat: [p[stat] for p in pointwise]
+            for stat in pointwise[0]
+            if stat not in ("n", "values")
+        }
+        curves[name]["n"] = float(len(reports))
+        curves[name]["values"] = matrix.tolist()
+
     first = reports[0]
     return AggregateReport(
         task_type=first["task_type"],
+        label=label,
         n_reports=len(reports),
         metrics=metrics,
+        curves=curves,
         inputs_summary=summary,
         incomplete=incomplete,
+        not_aggregated=not_aggregated,
         provenance={
             "task_signature": first["provenance"]["task_signature"],
             "versions": first["provenance"]["versions"],

@@ -93,8 +93,11 @@ airas-eval score nas_pre_training --inputs inputs.json --output evaluation.json
 複数 seed と 2 システム比較も評価層が引き受ける(agent が統計を自前実装しないため):
 
 ```bash
-# seed ごとの report を平均 ± 標準偏差に集約(同じタスク署名のものだけ。欠けている指標は incomplete に列挙)
-airas-eval aggregate --reports evaluation_seed0.json evaluation_seed1.json evaluation_seed2.json
+# seed ごとの report を手法ごとに集約(同じタスク署名のものだけ)。指標ごとに mean / std / sem /
+# min / max / median / q25 / q75 / 95% t 信頼区間 / n / 生の値。曲線は横軸が揃うものだけ点ごとに集約し、
+# 揃わないもの(pareto_front など)は not_aggregated に理由付きで列挙。一部の run にしか無い指標は
+# 平均せず incomplete に件数を列挙。--label で手法名を記録する
+airas-eval aggregate --label method_A --reports runs/A/seed*.json --output aggregate_A.json
 
 # 同じ参照データ上での 2 システムのペア比較(事例ごとの正誤に対する符号反転パーミュテーション検定)
 airas-eval compare nas_post_training --a inputs_A.json --b inputs_B.json

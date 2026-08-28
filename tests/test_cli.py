@@ -129,11 +129,14 @@ def test_aggregate_and_compare(tmp_path: Path):
             == 0
         )
         reports.append(str(target))
-    agg = _run("aggregate", "--reports", *reports)
+    agg = _run("aggregate", "--label", "sysA", "--reports", *reports)
     assert agg.returncode == 0, agg.stderr
     payload = json.loads(agg.stdout)
     assert payload["n_reports"] == 2
+    assert payload["label"] == "sysA"
     assert payload["metrics"]["accuracy"]["std"] == 0.0
+    assert len(payload["metrics"]["accuracy"]["values"]) == 2
+    assert "pareto_front" in payload["not_aggregated"]
     cmp = _run("compare", "nas_post_training", "--a", str(example), "--b", str(example))
     assert cmp.returncode == 0, cmp.stderr
     assert json.loads(cmp.stdout)["comparisons"]["correct"]["mean_diff"] == 0.0

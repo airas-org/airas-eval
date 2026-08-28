@@ -424,14 +424,28 @@ def _seed_reports(n: int) -> list[dict]:
 
 
 def test_aggregate_reports_over_seeds():
-    agg = aggregate_reports(_seed_reports(3))
+    agg = aggregate_reports(_seed_reports(3), label="method_A")
     assert agg.n_reports == 3
-    assert agg.metrics["accuracy"]["n"] == 3.0
-    assert 0.0 <= agg.metrics["accuracy"]["std"] < 0.2
+    assert agg.label == "method_A"
+    acc = agg.metrics["accuracy"]
+    assert acc["n"] == 3.0
+    assert len(acc["values"]) == 3
+    assert 0.0 <= acc["std"] < 0.2
+    assert acc["ci95_low"] <= acc["median"] <= acc["ci95_high"]
+    assert {"sem", "q25", "q75", "min", "max"} <= set(acc)
     assert agg.inputs_summary["n_examples"]["mean"] == 60.0
     assert agg.incomplete == {}
+    assert agg.curves == {} and agg.not_aggregated == {}
     assert len(agg.provenance["inputs_sha256"]) == 3
     json.loads(agg.to_json())
+
+
+def test_aggregate_single_report_reports_no_dispersion():
+    agg = aggregate_reports(_seed_reports(1))
+    assert agg.label is None
+    assert agg.metrics["accuracy"]["std"] is None
+    assert agg.metrics["accuracy"]["ci95_low"] is None
+    assert json.loads(agg.to_json())["metrics"]["accuracy"]["sem"] is None
 
 
 def test_aggregate_rejects_mixed_signatures_and_reports_incomplete():
@@ -448,6 +462,46 @@ def test_aggregate_rejects_mixed_signatures_and_reports_incomplete():
     d = json.loads(evaluate("classification", CLS_FULL).to_json())
     agg = aggregate_reports([c, d])
     assert agg.incomplete["log_loss"] == 1  # only the run with probabilities
+    assert "log_loss" not in agg.metrics
+
+
+def _ranking_report(seed: int, n: int) -> dict:
+    r = np.random.default_rng(seed)
+    ref = r.random(n).tolist()
+    pred = (np.asarray(ref) + 0.3 * r.random(n)).tolist()
+    report = evaluate(
+        "candidate_ranking", {"predicted_scores": pred, "reference_scores": ref}
+    )
+    return json.loads(report.to_json())
+
+
+def test_aggregate_curves_pointwise_when_aligned():
+    agg = aggregate_reports([_ranking_report(s, 12) for s in range(3)])
+    curve = agg.curves["precision_at_top_k_curve"]
+    assert curve["n"] == 3.0
+    assert len(curve["mean"]) == len(curve["std"]) == len(curve["ci95_low"]) == 12
+    assert np.shape(curve["values"]) == (3, 12)
+    assert curve["mean"][-1] == 1.0  # top-n precision is always 1
+    assert agg.not_aggregated == {}
+
+
+def test_aggregate_curves_not_aggregated_when_unalignable():
+    agg = aggregate_reports([_ranking_report(0, 10), _ranking_report(1, 12)])
+    assert agg.curves == {}
+    assert "lengths differ" in agg.not_aggregated["selection_regret_curve"]
+    mo = [
+        json.loads(
+            evaluate(
+                "multiobjective",
+                {"points": pts, "reference_point": [1.0, 1.0]},
+            ).to_json()
+        )
+        for pts in ([[0.1, 0.9], [0.5, 0.5]], [[0.2, 0.7], [0.4, 0.6], [0.6, 0.3]])
+    ]
+    agg = aggregate_reports(mo)
+    assert "pareto_front" in agg.not_aggregated
+    assert "pareto_front" not in agg.curves
+    assert agg.metrics["hypervolume_2d"]["n"] == 2.0
 
 
 def test_compare_paired_on_classification():

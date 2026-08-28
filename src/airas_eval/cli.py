@@ -8,7 +8,7 @@ Agents interact with airas-eval only through files and this CLI:
                 the JSON Schema of the inputs file under ``input_schema``
 * ``validate``  check an inputs file against that contract, without scoring
 * ``score``     compute the full metric set for one inputs file
-* ``aggregate`` mean ± std over several reports (e.g. seeds)
+* ``aggregate`` descriptive statistics over several reports (e.g. seeds)
 * ``compare``   paired significance test between two inputs files
 
 ``score`` is the process-level trust boundary: run it from a pinned
@@ -177,8 +177,13 @@ def main() -> None:
         "--output", help="write the report JSON here (default: stdout)"
     )
 
-    p_agg = sub.add_parser("aggregate", help="mean ± std over several score reports")
+    p_agg = sub.add_parser(
+        "aggregate", help="descriptive statistics over several score reports"
+    )
     p_agg.add_argument("--reports", nargs="+", required=True, help="report JSON files")
+    p_agg.add_argument(
+        "--label", help="name of the system these runs belong to (e.g. method_A)"
+    )
     p_agg.add_argument(
         "--output", help="write the aggregate JSON here (default: stdout)"
     )
@@ -226,7 +231,9 @@ def main() -> None:
         report = evaluate(args.task_type, _load(args.inputs))
         _emit(report.to_json() + "\n", args.output)
     elif args.command == "aggregate":
-        aggregate = aggregate_reports([_load(path) for path in args.reports])
+        aggregate = aggregate_reports(
+            [_load(path) for path in args.reports], label=args.label
+        )
         _emit(aggregate.to_json() + "\n", args.output)
     elif args.command == "compare":
         result = compare(args.task_type, _load(args.a), _load(args.b))

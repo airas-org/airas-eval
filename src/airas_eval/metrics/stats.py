@@ -1,29 +1,59 @@
 """Statistics over repeated runs and paired systems.
 
 Papers must report variability, not single numbers. These are the two pieces
-the evaluator needs: mean +/- sample std over seeds, and a paired sign-flip
-permutation test for "A beats B on the same examples". Kept in-house because
-both are a few lines with no ambiguous variant; the test is exact in its
-Monte-Carlo sense and deterministic for a fixed seed.
+the evaluator needs: descriptive statistics over seeds (delegated to numpy and
+scipy.stats — nothing is hand-rolled), and a paired sign-flip permutation test
+for "A beats B on the same examples", which is exact in its Monte-Carlo sense
+and deterministic for a fixed seed.
 """
 
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
+import scipy.stats
 
 
-def mean_std(values: Sequence[float]) -> dict[str, float]:
-    """Mean and sample std (ddof=1; 0.0 for a single value), with n."""
+def summarize(values: Sequence[float]) -> dict[str, Any]:
+    """Descriptive statistics over repeated runs, all delegated to numpy/scipy.
+
+    Returns mean, sample std (ddof=1), sem, min, max, median, q25, q75, a 95%
+    t-interval (``ci95_low``/``ci95_high``), ``n`` and the raw ``values``.
+    Dispersion (std, sem, ci95_*) is ``None`` for a single value — one run
+    has no variability to report, and ``0.0`` would read as "no spread".
+    """
     arr = np.asarray(values, dtype=float)
     if arr.ndim != 1 or len(arr) == 0:
         raise ValueError("values must be a non-empty 1-dimensional sequence")
-    return {
-        "mean": float(arr.mean()),
-        "std": float(arr.std(ddof=1)) if len(arr) > 1 else 0.0,
-        "min": float(arr.min()),
-        "max": float(arr.max()),
-        "n": float(len(arr)),
+    n = len(arr)
+    mean = float(np.mean(arr))
+    out: dict[str, Any] = {
+        "n": float(n),
+        "mean": mean,
+        "std": None,
+        "sem": None,
+        "min": float(np.min(arr)),
+        "max": float(np.max(arr)),
+        "median": float(np.median(arr)),
+        "q25": float(np.percentile(arr, 25)),
+        "q75": float(np.percentile(arr, 75)),
+        "ci95_low": None,
+        "ci95_high": None,
+        "values": arr.tolist(),
     }
+    if n > 1:
+        sem = float(scipy.stats.sem(arr, ddof=1))
+        if sem > 0.0:
+            low, high = scipy.stats.t.interval(0.95, df=n - 1, loc=mean, scale=sem)
+        else:  # identical values: the interval degenerates to the mean
+            low = high = mean
+        out.update(
+            std=float(np.std(arr, ddof=1)),
+            sem=sem,
+            ci95_low=float(low),
+            ci95_high=float(high),
+        )
+    return out
 
 
 def paired_permutation_test(
