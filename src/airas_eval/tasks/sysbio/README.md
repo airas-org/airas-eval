@@ -14,7 +14,7 @@
 
 ### `reaction_network_inference`
 
-署名: `reaction_network_inference/v1@a5dd9548968c`
+署名: `reaction_network_inference/v1@37c410874dfb`
 
 反応ネットワーク推定。反応を取り除いた生化学モデル(SBML など)を与えられたエージェントが、摂動実験の時系列から欠損反応を推定して提出したモデルを、真のモデルと比べて採点する。インスタンスごとに、追加した反応と欠損反応の集合の一致(適合率・再現率・F1、modifier まで要求する厳格版も)と、同じ条件でシミュレートした時系列の誤差(bounded sMAPE)を計算し、全インスタンスの単純平均を返す。SciGym(Duan et al. 2025)の Table 1 と同じ定義。シミュレーションは評価層では行わないので、時系列は実験側が同じ条件で得たものを渡す。
 
@@ -30,12 +30,12 @@
 | 指標 | 必要な入力 | 値域 | 良い方向 | 説明 | 実装 | 固定パラメータ |
 |---|---|---|---|---|---|---|
 | `trajectory_smape` | `predicted_trajectories`, `reference_trajectories` | [0, 1] | 低いほど良い | 軌道誤差(STE)。提出モデルと真のモデルの時系列の bounded sMAPE をインスタンスで平均した値。 | `airas_eval.tasks.sysbio._metric_sets.trajectory_smape` | — |
-| `reaction_precision` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の適合率(インスタンス平均)。提出モデルが追加した反応のうち、反応物と生成物の集合が一致したものの割合。 | `airas_eval.tasks.sysbio._metric_sets.reaction_precision` | with_modifiers=False |
-| `reaction_recall` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の再現率(インスタンス平均)。取り除かれていた反応のうち、反応物と生成物の集合が一致したものが提出された割合。 | `airas_eval.tasks.sysbio._metric_sets.reaction_recall` | with_modifiers=False |
-| `reaction_f1` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の F1(インスタンス平均)。インスタンスごとの適合率と再現率の調和平均を単純平均した値。 | `airas_eval.tasks.sysbio._metric_sets.reaction_f1` | with_modifiers=False |
-| `reaction_precision_with_modifiers` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の適合率(インスタンス平均)。提出モデルが追加した反応のうち、反応物・生成物に加えて modifier の集合も一致したものの割合。 | `airas_eval.tasks.sysbio._metric_sets.reaction_precision` | with_modifiers=True |
-| `reaction_recall_with_modifiers` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の再現率(インスタンス平均)。取り除かれていた反応のうち、反応物・生成物に加えて modifier の集合も一致したものが提出された割合。 | `airas_eval.tasks.sysbio._metric_sets.reaction_recall` | with_modifiers=True |
-| `reaction_f1_with_modifiers` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の F1(インスタンス平均)。インスタンスごとの適合率と再現率の調和平均を単純平均した値。 | `airas_eval.tasks.sysbio._metric_sets.reaction_f1` | with_modifiers=True |
+| `reaction_precision` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の適合率(インスタンス平均)。提出モデルが追加した反応のうち、反応物と生成物の集合が一致したものの割合。 | `airas_eval.tasks.sysbio._metric_sets.reaction_score` | metric='precision', with_modifiers=False |
+| `reaction_recall` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の再現率(インスタンス平均)。取り除かれていた反応のうち、反応物と生成物の集合が一致したものが提出された割合。 | `airas_eval.tasks.sysbio._metric_sets.reaction_score` | metric='recall', with_modifiers=False |
+| `reaction_f1` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の F1(インスタンス平均)。インスタンスごとの適合率と再現率の調和平均を単純平均した値。 | `airas_eval.tasks.sysbio._metric_sets.reaction_score` | metric='f1', with_modifiers=False |
+| `reaction_precision_with_modifiers` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の適合率(インスタンス平均)。提出モデルが追加した反応のうち、反応物・生成物に加えて modifier の集合も一致したものの割合。 | `airas_eval.tasks.sysbio._metric_sets.reaction_score` | metric='precision', with_modifiers=True |
+| `reaction_recall_with_modifiers` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の再現率(インスタンス平均)。取り除かれていた反応のうち、反応物・生成物に加えて modifier の集合も一致したものが提出された割合。 | `airas_eval.tasks.sysbio._metric_sets.reaction_score` | metric='recall', with_modifiers=True |
+| `reaction_f1_with_modifiers` | `predicted_reactions`, `reference_reactions` | [0, 1] | 高いほど良い | 反応の F1(インスタンス平均)。インスタンスごとの適合率と再現率の調和平均を単純平均した値。 | `airas_eval.tasks.sysbio._metric_sets.reaction_score` | metric='f1', with_modifiers=True |
 
 入力サイズ(指標ではない):
 

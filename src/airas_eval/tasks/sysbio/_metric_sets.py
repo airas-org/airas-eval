@@ -29,71 +29,35 @@ def _key(reaction: Reaction, with_modifiers: bool) -> tuple[frozenset[str], ...]
     return key + (frozenset(reaction["modifiers"]),) if with_modifiers else key
 
 
-def _instance_scores(
-    predicted: list[Reaction], reference: list[Reaction], with_modifiers: bool
-) -> tuple[float, float, float]:
-    # 集合の一致を、和集合上の 2 値分類として標準実装に委ねる。片方が空なら
-    # zero_division=0 で 0 点になり、参照実装の規約と一致する
-    pred = {_key(r, with_modifiers) for r in predicted}
-    ref = {_key(r, with_modifiers) for r in reference}
-    universe = sorted(pred | ref, key=repr)
-    if not universe:
-        return 0.0, 0.0, 0.0
-    y_pred = [int(k in pred) for k in universe]
-    y_ref = [int(k in ref) for k in universe]
-    return (
-        _cls.precision(y_pred, y_ref, average="binary"),
-        _cls.recall(y_pred, y_ref, average="binary"),
-        _cls.f1(y_pred, y_ref, average="binary"),
-    )
-
-
-def _mean_over_instances(
+def reaction_score(
     predicted_reactions: Reactions,
     reference_reactions: Reactions,
+    metric: str,
     with_modifiers: bool,
-    index: int,
 ) -> float:
-    scores = [
-        _instance_scores(p, r, with_modifiers)[index]
-        for p, r in zip(predicted_reactions, reference_reactions, strict=True)
-    ]
+    """Mean over instances of precision / recall / f1 between the two reaction
+    sets, scored as binary labels over their union by ``metrics.classification``
+    (zero_division=0 gives the benchmark's empty-set convention for free)."""
+    scores = []
+    for predicted, reference in zip(
+        predicted_reactions, reference_reactions, strict=True
+    ):
+        pred = {_key(r, with_modifiers) for r in predicted}
+        ref = {_key(r, with_modifiers) for r in reference}
+        universe = list(pred | ref)
+        y_pred = [int(k in pred) for k in universe]
+        y_ref = [int(k in ref) for k in universe]
+        fn = getattr(_cls, metric)
+        scores.append(fn(y_pred, y_ref, average="binary") if universe else 0.0)
     return float(sum(scores) / len(scores))
 
 
-def reaction_precision(
-    predicted_reactions: Reactions, reference_reactions: Reactions, with_modifiers: bool
-) -> float:
-    return _mean_over_instances(
-        predicted_reactions, reference_reactions, with_modifiers, 0
-    )
-
-
-def reaction_recall(
-    predicted_reactions: Reactions, reference_reactions: Reactions, with_modifiers: bool
-) -> float:
-    return _mean_over_instances(
-        predicted_reactions, reference_reactions, with_modifiers, 1
-    )
-
-
-def reaction_f1(
-    predicted_reactions: Reactions, reference_reactions: Reactions, with_modifiers: bool
-) -> float:
-    return _mean_over_instances(
-        predicted_reactions, reference_reactions, with_modifiers, 2
-    )
-
-
 def _instance_smape(predicted: Trajectory, reference: Trajectory) -> float:
-    # 参照実装と同じ整列: 両方の種 ID の和集合を sorted し、片方に無い種があれば形が
-    # 合わなくなるので最大誤差 1 とする
+    # 参照実装と同じ整列: 種 ID の和集合で並べ、片方に無い種や長さ違いは最大誤差 1
     keys = sorted(set(predicted) | set(reference))
     pred = [predicted[k] for k in keys if k in predicted]
     ref = [reference[k] for k in keys if k in reference]
-    if len(pred) != len(ref) or any(
-        len(a) != len(b) for a, b in zip(pred, ref, strict=True)
-    ):
+    if [len(s) for s in pred] != [len(s) for s in ref]:
         return 1.0
     return _reg.smape_bounded(pred, ref)
 
@@ -111,7 +75,7 @@ def trajectory_smape(
     predicted_trajectories: Trajectories, reference_trajectories: Trajectories
 ) -> float:
     fits = per_instance_trajectory_fit(predicted_trajectories, reference_trajectories)
-    return float(1.0 - sum(fits) / len(fits))
+    return 1.0 - sum(fits) / len(fits)
 
 
 def n_instances(reference_reactions: Reactions) -> float:
@@ -129,35 +93,22 @@ def _recovery_bindings(with_modifiers: bool) -> tuple[MetricBinding, ...]:
         if with_modifiers
         else "反応物と生成物の集合が一致した"
     )
-    kwargs = {"with_modifiers": with_modifiers}
-    return (
+    descriptions = {
+        "precision": f"反応の適合率(インスタンス平均)。提出モデルが追加した反応のうち、{strict}ものの割合。",
+        "recall": f"反応の再現率(インスタンス平均)。取り除かれていた反応のうち、{strict}ものが提出された割合。",
+        "f1": "反応の F1(インスタンス平均)。インスタンスごとの適合率と再現率の調和平均を単純平均した値。",
+    }
+    return tuple(
         MetricBinding(
-            f"reaction_precision{suffix}",
-            reaction_precision,
+            f"reaction_{metric}{suffix}",
+            reaction_score,
             _REACTIONS,
-            kwargs,
-            description=f"反応の適合率(インスタンス平均)。提出モデルが追加した反応のうち、{strict}ものの割合。",
+            {"metric": metric, "with_modifiers": with_modifiers},
+            description=description,
             value_range="[0, 1]",
             direction="higher",
-        ),
-        MetricBinding(
-            f"reaction_recall{suffix}",
-            reaction_recall,
-            _REACTIONS,
-            kwargs,
-            description=f"反応の再現率(インスタンス平均)。取り除かれていた反応のうち、{strict}ものが提出された割合。",
-            value_range="[0, 1]",
-            direction="higher",
-        ),
-        MetricBinding(
-            f"reaction_f1{suffix}",
-            reaction_f1,
-            _REACTIONS,
-            kwargs,
-            description="反応の F1(インスタンス平均)。インスタンスごとの適合率と再現率の調和平均を単純平均した値。",
-            value_range="[0, 1]",
-            direction="higher",
-        ),
+        )
+        for metric, description in descriptions.items()
     )
 
 
