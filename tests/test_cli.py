@@ -33,10 +33,10 @@ def test_list_index_is_one_line_per_task():
 def test_list_accepts_several_task_types_and_all():
     two = _run("list", "nas_pre_training", "nas_post_training")
     assert two.returncode == 0, two.stderr
-    assert two.stdout.count("指標(") == 2
+    assert two.stdout.count("\n  指標(") == 2  # 見出し行のみ。説明文にも「指標(」は出る
     assert "classification:  [" not in two.stdout
     everything = _run("list", "--all")
-    assert everything.stdout.count("指標(") == len(TASKS)
+    assert everything.stdout.count("\n  指標(") == len(TASKS)
     index = json.loads(_run("list", "--json").stdout)
     assert set(index) == set(TASKS) and "metrics" not in index["search"]
     assert index["search"]["n_metrics"] == len(TASKS["search"].metrics) + len(
