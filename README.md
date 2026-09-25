@@ -39,9 +39,19 @@ tasks/
                               137 件のデータをハッシュで固定、論文 Table 1 の最良値との差
 ```
 
-ベンチマークパックの依存は本体に含めない。`scigym_small` を使うには SciGym を固定コミットから
-入れる(`pip install "scigym @ git+https://github.com/h4duan/SciGym@88a7b93609e35b6ecb4eb343d816d6ff09256c6a" pygraphviz`。Evaluator が反応グラフの構築に pygraphviz を使うが、SciGym 自身は依存に挙げていない)。
-無ければ指標は `missing_dependency` として skipped になる。
+ベンチマークパックの依存は extra で持つ(`airas-eval[scigym]` = SciGym の固定コミット + pygraphviz)。
+SciGym は PyPI に無く git でしか入らないため、airas-eval 自体も PyPI ではなく git のタグで配布する:
+
+```toml
+[dependency-groups]
+eval = ["airas-eval[scigym]"]
+
+[tool.uv.sources]
+airas-eval = { git = "https://github.com/airas-org/airas-eval", tag = "v0.12.0" }
+```
+
+aarch64 では libroadrunner / antimony の差し替えと libnuml / libcombine の除外が別途要る(airas-template の
+`pyproject.toml` を参照)。extra 無しで `scigym_small` を呼ぶと、指標は `missing_dependency` として skipped になる。
 
 NAS は「アーキテクチャの性能をいつ測るか」で 2 タスクに分かれる:
 

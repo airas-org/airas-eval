@@ -1,6 +1,6 @@
 [project]
 name = "airas-eval"
-version = "0.11.1"
+version = "0.12.0"
 description = "Trusted evaluation layer for AIRAS: the full fixed set of standard metrics per task type, computed from raw predictions"
 readme = "README.md"
 license = "MIT"
@@ -27,6 +27,14 @@ dependencies = [
     "pydantic>=2.7",
 ]
 
+# ベンチマークパックの依存。PyPI に無い git 固定の依存を含むので、airas-eval 自体も
+# git（タグ）で配布する。利用側は `airas-eval[scigym]` を [tool.uv.sources] の git 指定で入れる
+[project.optional-dependencies]
+scigym = [
+    "scigym @ git+https://github.com/h4duan/SciGym@88a7b93609e35b6ecb4eb343d816d6ff09256c6a",
+    "pygraphviz==2.0.2rc1",  # Evaluator が反応グラフの構築に使う。SciGym 自身は依存に挙げていない
+]
+
 [project.urls]
 Homepage = "https://github.com/airas-org/airas-eval"
 Repository = "https://github.com/airas-org/airas-eval"
@@ -46,8 +54,14 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/airas_eval"]
+
+[tool.uv]
+prerelease = "allow"  # pygraphviz の aarch64 wheel は 2.0 のリリース候補にしか無い
 
 [tool.ruff]
 line-length = 88

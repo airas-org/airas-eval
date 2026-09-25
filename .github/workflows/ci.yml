@@ -26,12 +26,11 @@ jobs:
         run: uv run mypy src
       - name: Test
         run: uv run pytest -q
-      - name: Build and smoke-test the wheel as a consumer would
+      - name: Smoke-test the CLI as a consumer would (installed from this checkout)
         run: |
-          uv build
-          uvx --from dist/*.whl airas-eval list
-          uvx --from dist/*.whl airas-eval score nas_pre_training --inputs examples/nas_pre_training.json
-          uvx --from dist/*.whl airas-eval score nas_post_training --inputs examples/nas_post_training.json
+          uvx --from . airas-eval list
+          uvx --from . airas-eval score nas_pre_training --inputs examples/nas_pre_training.json
+          uvx --from . airas-eval score nas_post_training --inputs examples/nas_post_training.json
 
   scigym-pack:
     # ベンチマークパックは重い依存(SciGym とシミュレータ一式)を持つので、本体とは別に確かめる
@@ -41,10 +40,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.11"
-      - name: Sync dependencies (locked) and install the pinned SciGym
-        run: |
-          uv sync --frozen
-          uv pip install "scigym @ git+https://github.com/h4duan/SciGym@88a7b93609e35b6ecb4eb343d816d6ff09256c6a" \
-            --prerelease=allow "pygraphviz==2.0.2rc1"
+      - name: Sync dependencies with the scigym extra (locked)
+        run: uv sync --frozen --extra scigym
       - name: Test the pack against the benchmark's own evaluator
         run: uv run --no-sync pytest -q tests/test_scigym.py
