@@ -1,6 +1,6 @@
 [project]
 name = "airas-eval"
-version = "0.12.2"
+version = "0.12.3"
 description = "Trusted evaluation layer for AIRAS: the full fixed set of standard metrics per task type, computed from raw predictions"
 readme = "README.md"
 license = "MIT"
@@ -78,6 +78,7 @@ select = ["E", "F", "I", "UP", "B"]
 "src/airas_eval/tasks/nas/_inputs.py" = ["E501"]
 "src/airas_eval/tasks/scigym/_metric_sets.py" = ["E501"]
 "src/airas_eval/tasks/scigym/_inputs.py" = ["E501"]
+"src/airas_eval/tasks/scigym/small.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"
