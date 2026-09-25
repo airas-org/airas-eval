@@ -3,8 +3,7 @@ import math
 import pytest
 
 from airas_eval import evaluate, validate_inputs
-from airas_eval.exceptions import UndefinedMetric
-from airas_eval.metrics import regression, sets
+from airas_eval.metrics import regression
 from airas_eval.tasks.sysbio import _metric_sets
 
 
@@ -93,17 +92,6 @@ def test_inputs_must_line_up():
             "reaction_network_inference",
             dict(INPUTS, predicted_trajectories=[{"A": [math.nan]}, {"X": [1.0]}]),
         )
-
-
-def test_set_metrics():
-    assert sets.precision(["a", "b", "c"], ["a", "b", "d"]) == pytest.approx(2 / 3)
-    assert sets.recall(["a", "b", "c"], ["a", "b", "d", "e"]) == pytest.approx(0.5)
-    assert sets.f1(["a"], ["a"]) == 1.0
-    assert sets.f1(["a"], ["b"]) == 0.0
-    with pytest.raises(UndefinedMetric):
-        sets.precision([], ["a"])
-    with pytest.raises(UndefinedMetric):
-        sets.recall(["a"], [])
 
 
 def test_smape_bounded():

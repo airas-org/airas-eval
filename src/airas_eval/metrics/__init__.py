@@ -5,7 +5,6 @@ from airas_eval.metrics import (
     regression,
     search,
     selection,
-    sets,
     stats,
 )
 
@@ -16,6 +15,5 @@ __all__ = [
     "regression",
     "search",
     "selection",
-    "sets",
     "stats",
 ]

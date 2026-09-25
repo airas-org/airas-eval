@@ -13,9 +13,8 @@ task metric is the plain mean over instances, which is how the benchmark
 tables report them.
 """
 
-from airas_eval.exceptions import UndefinedMetric
+from airas_eval.metrics import classification as _cls
 from airas_eval.metrics import regression as _reg
-from airas_eval.metrics import sets as _sets
 from airas_eval.spec import MetricBinding, MetricSet
 from airas_eval.tasks.sysbio._inputs import Trajectory
 
@@ -33,12 +32,20 @@ def _key(reaction: Reaction, with_modifiers: bool) -> tuple[frozenset[str], ...]
 def _instance_scores(
     predicted: list[Reaction], reference: list[Reaction], with_modifiers: bool
 ) -> tuple[float, float, float]:
+    # 集合の一致を、和集合上の 2 値分類として標準実装に委ねる。片方が空なら
+    # zero_division=0 で 0 点になり、参照実装の規約と一致する
     pred = {_key(r, with_modifiers) for r in predicted}
     ref = {_key(r, with_modifiers) for r in reference}
-    try:
-        return _sets.precision(pred, ref), _sets.recall(pred, ref), _sets.f1(pred, ref)
-    except UndefinedMetric:  # ベンチマークの規約: どちらかが空なら 0 点
+    universe = sorted(pred | ref, key=repr)
+    if not universe:
         return 0.0, 0.0, 0.0
+    y_pred = [int(k in pred) for k in universe]
+    y_ref = [int(k in ref) for k in universe]
+    return (
+        _cls.precision(y_pred, y_ref, average="binary"),
+        _cls.recall(y_pred, y_ref, average="binary"),
+        _cls.f1(y_pred, y_ref, average="binary"),
+    )
 
 
 def _mean_over_instances(
@@ -155,7 +162,7 @@ def _recovery_bindings(with_modifiers: bool) -> tuple[MetricBinding, ...]:
 
 
 REACTION_NETWORK_INFERENCE = MetricSet(
-    provenance_packages=("numpy",),
+    provenance_packages=("numpy", "scikit-learn"),
     notes=(
         "SciGym(Duan et al. 2025)の採点規約。反応の一致は種 ID の集合で判定し、順序と化学量論は無視。"
         "追加反応か欠損反応が空のインスタンスは適合率・再現率・F1 とも 0。軌道誤差は "
