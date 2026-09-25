@@ -42,7 +42,7 @@ class ScigymSmallInputs(TaskInputs):
     重複なく、ファイル内容は公式リリース(h4duan/scigym-sbml の small split)と一致すること。"""
 
     instances: list[Instance] = Field(
-        description="評価するインスタンス。全件(137)でなくてもよく、coverage で報告される。"
+        description="評価するインスタンス。全件(137)でなくてもよく、件数は n_instances で報告される。"
     )
 
     @model_validator(mode="after")

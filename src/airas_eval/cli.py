@@ -19,6 +19,7 @@ that.
 
 import argparse
 import json
+import textwrap
 import sys
 import unicodedata
 from typing import Any
@@ -99,8 +100,12 @@ def _print_details(task_types: list[str]) -> None:
     for task_type in task_types:
         info = TASKS[task_type].describe()
         print(f"{task_type}:  [{info['signature']}]")
-        if info["description"]:
-            print(f"  {_short(info['description'], 80)}")
+        if info["description"]:  # 詳細表示は全文。導入手順などはここにしか出ない
+            print(
+                textwrap.fill(
+                    info["description"], 96, initial_indent="  ", subsequent_indent="  "
+                )
+            )
         print("  入力:")
         heads = [_field_signature(i) for i in info["inputs"]]
         width = max(len(h) for h in heads)
