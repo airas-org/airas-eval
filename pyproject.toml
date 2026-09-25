@@ -78,6 +78,7 @@ module = [
     "sklearn.*",
     "scipy.*",
     "scigym.*",
+    "pygraphviz.*",
 ]
 ignore_missing_imports = true
 
