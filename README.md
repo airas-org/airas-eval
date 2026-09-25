@@ -5,6 +5,12 @@
 評価指標一式を固定された形で受け取る。エージェントは評価スクリプトを実装せず、
 どの指標を(どの variant で)報告するかも選ばない。
 
+用途は 2 つ。汎用の評価ファミリー(分類・探索など)と、**固定ベンチマークのパック**
+である。パックはデータセット(ハッシュで固定)、ベンチマーク公式の評価器(コミットで
+固定)、論文の公表値をひとまとめにしたもので、AIRAS はパックに対して手法だけを変えて、
+公表値を超えるまで研究を回す。パックは重い依存(シミュレータなど)を持ってよく、その
+依存はパックを使う研究だけが負う。
+
 ## 構成
 
 2 層構造で、その間に呼び出し側が選べるものはない。
@@ -25,11 +31,17 @@
 ```
 tasks/
 ├── generic/   classification, binary_classification, search, candidate_ranking, multiobjective
-└── nas/       nas_pre_training  = search + candidate_ranking の全指標 + NAS 追加分(wall-clock 軸、
-               │                    探索空間内順位、ランダム探索比、上位 10% 相関)
-               └── nas_post_training = classification + multiobjective の全指標 + NAS 追加分
-                                    (ランダムアーキテクチャ比、テストリグレット)
+├── nas/       nas_pre_training  = search + candidate_ranking の全指標 + NAS 追加分(wall-clock 軸、
+│              │                    探索空間内順位、ランダム探索比、上位 10% 相関)
+│              └── nas_post_training = classification + multiobjective の全指標 + NAS 追加分
+│                                   (ランダムアーキテクチャ比、テストリグレット)
+└── scigym/    scigym_small = SciGym 公式 Evaluator(コミット固定)による STE と反応 P/R/F1、
+                              137 件のデータをハッシュで固定、論文 Table 1 の最良値との差
 ```
+
+ベンチマークパックの依存は本体に含めない。`scigym_small` を使うには SciGym を固定コミットから
+入れる(`pip install "scigym @ git+https://github.com/h4duan/SciGym@88a7b93609e35b6ecb4eb343d816d6ff09256c6a" pygraphviz`。Evaluator が反応グラフの構築に pygraphviz を使うが、SciGym 自身は依存に挙げていない)。
+無ければ指標は `missing_dependency` として skipped になる。
 
 NAS は「アーキテクチャの性能をいつ測るか」で 2 タスクに分かれる:
 
@@ -58,6 +70,7 @@ airas-eval validate nas_post_training --inputs inputs.json   # 形式だけ検�
 
 - [`tasks/generic/README.md`](src/airas_eval/tasks/generic/README.md) — 汎用の評価ファミリー
 - [`tasks/nas/README.md`](src/airas_eval/tasks/nas/README.md) — NAS の 2 タスク
+- [`tasks/scigym/README.md`](src/airas_eval/tasks/scigym/README.md) — SciGym-small ベンチマークパック
 
 **各指標の説明(定義、読み方、高低どちらが良いか)はこれらの README の表に載っている。**
 タスクやバンドルを変更したら `python -m airas_eval.tasks.readme` で再生成する。
