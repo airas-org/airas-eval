@@ -66,7 +66,8 @@ def hypervolume_2d(
         return 0.0
     # np.unique sorts ascending by objective 1; on a non-dominated 2D front
     # objective 2 is then strictly decreasing, so a single sweep is exact.
-    front = np.unique(contributing[np.array(pareto_front_mask(contributing))], axis=0)
+    mask = np.asarray(pareto_front_mask(contributing.tolist()), dtype=bool)
+    front = np.unique(contributing[mask], axis=0)
     right_edges = np.append(front[1:, 0], ref[0])
     return float(np.sum((right_edges - front[:, 0]) * (ref[1] - front[:, 1])))
 
