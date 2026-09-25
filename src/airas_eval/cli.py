@@ -19,8 +19,8 @@ that.
 
 import argparse
 import json
-import textwrap
 import sys
+import textwrap
 import unicodedata
 from typing import Any
 
