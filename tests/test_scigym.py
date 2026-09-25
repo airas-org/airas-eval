@@ -81,6 +81,23 @@ def test_matches_the_official_controller_output():
     assert m["trajectory_smape_vs_best_published"] == pytest.approx(
         official["observe_smape"] - 0.3212
     )
+    # NTS is not in the Controller's evaluation.json; check it against the
+    # Evaluator's own functions on the same models
+    from scigym.data import SBML
+    from scigym.eval.utils import (
+        evaluate_species_interaction_f1,
+        evaluate_typed_species_interaction_f1,
+    )
+
+    true, pred = SBML(_instance()["reference_sbml"]), SBML(submitted)
+    edges = evaluate_species_interaction_f1(true.model, pred.model)
+    typed = evaluate_typed_species_interaction_f1(true.model, pred.model)
+    assert m["topology_f1"] == pytest.approx(edges["species_edges_undirected_f1"])
+    assert m["topology_f1_reactant_product"] == pytest.approx(
+        typed["reactant_product_f1"]
+    )
+    for key in ("topology_f1_reactant_modifier", "topology_f1_modifier_product"):
+        assert key in m or key in report.skipped["undefined_on_data"]
     assert report.inputs_summary["n_valid_submissions"] == 1
     assert report.provenance["versions"]["scigym"] != "not installed"
 
