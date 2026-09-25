@@ -67,6 +67,7 @@ def test_matches_the_official_controller_output():
     official = json.loads((FIXTURE / "evaluation.json").read_text())
     submitted = (FIXTURE / "final_model.xml").read_text()
     report = evaluate("scigym_small", {"instances": [_instance(submitted)]})
+    assert not report.skipped["missing_dependency"], report.skipped
     m = report.metrics
     assert m["trajectory_smape"] == pytest.approx(official["observe_smape"])
     for ours, theirs in [

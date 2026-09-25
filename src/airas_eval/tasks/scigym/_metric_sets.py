@@ -85,6 +85,7 @@ def _scigym() -> tuple[Any, Any, Any]:
     )
     if libpython.exists():
         ctypes.CDLL(str(libpython), mode=ctypes.RTLD_GLOBAL)
+    import pygraphviz  # noqa: F401 - Evaluator が反応グラフの構築で遅延 import する
     from scigym.data import SBML
     from scigym.data.question import Question
     from scigym.eval import Evaluator

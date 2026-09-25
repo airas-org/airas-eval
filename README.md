@@ -40,7 +40,7 @@ tasks/
 ```
 
 ベンチマークパックの依存は本体に含めない。`scigym_small` を使うには SciGym を固定コミットから
-入れる(`pip install "scigym @ git+https://github.com/h4duan/SciGym@88a7b93609e35b6ecb4eb343d816d6ff09256c6a"`)。
+入れる(`pip install "scigym @ git+https://github.com/h4duan/SciGym@88a7b93609e35b6ecb4eb343d816d6ff09256c6a" pygraphviz`。Evaluator が反応グラフの構築に pygraphviz を使うが、SciGym 自身は依存に挙げていない)。
 無ければ指標は `missing_dependency` として skipped になる。
 
 NAS は「アーキテクチャの性能をいつ測るか」で 2 タスクに分かれる:
