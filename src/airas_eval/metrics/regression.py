@@ -4,10 +4,13 @@ In-house exceptions, kept deliberately:
 - ``mape`` raises on zero references instead of scikit-learn's silent epsilon
   clamping (which quietly turns the metric into a different one);
 - ``smape`` has no sklearn implementation; the |pred|+|true| denominator
-  variant is fixed here.
+  variant is fixed here;
+- ``smape_bounded`` is the [0, 1] variant without the factor 2, where an
+  element with pred = true = 0 counts as 0 error (the SciGym convention).
 """
 
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from scipy import stats as _stats
@@ -47,6 +50,24 @@ def smape(predicted: Sequence[float], reference: Sequence[float]) -> float:
     if np.any(denom == 0):
         raise UndefinedMetric("sMAPE is undefined when pred and true are both zero")
     return float(np.mean(2.0 * np.abs(y_pred - y_true) / denom))
+
+
+def smape_bounded(predicted: Sequence[Any], reference: Sequence[Any]) -> float:
+    """Bounded symmetric MAPE in [0, 1]: mean over all elements of
+    |pred - true| / (|pred| + |true|), where an element with both values zero
+    contributes 0. Inputs may be nested (e.g. species x time) but must have
+    the same shape."""
+    y_pred = np.asarray(predicted, dtype=float)
+    y_true = np.asarray(reference, dtype=float)
+    if y_pred.shape != y_true.shape:
+        raise ValueError(f"shape mismatch: {y_pred.shape} vs {y_true.shape}")
+    if y_true.size == 0:
+        raise ValueError("cannot compute a metric on zero elements")
+    denom = np.abs(y_pred) + np.abs(y_true)
+    ratio = np.divide(
+        np.abs(y_pred - y_true), denom, out=np.zeros_like(denom), where=denom != 0
+    )
+    return float(ratio.mean())
 
 
 def r2_score(predicted: Sequence[float], reference: Sequence[float]) -> float:

@@ -25,10 +25,12 @@
 ```
 tasks/
 ├── generic/   classification, binary_classification, search, candidate_ranking, multiobjective
-└── nas/       nas_pre_training  = search + candidate_ranking の全指標 + NAS 追加分(wall-clock 軸、
-               │                    探索空間内順位、ランダム探索比、上位 10% 相関)
-               └── nas_post_training = classification + multiobjective の全指標 + NAS 追加分
-                                    (ランダムアーキテクチャ比、テストリグレット)
+├── nas/       nas_pre_training  = search + candidate_ranking の全指標 + NAS 追加分(wall-clock 軸、
+│              │                    探索空間内順位、ランダム探索比、上位 10% 相関)
+│              └── nas_post_training = classification + multiobjective の全指標 + NAS 追加分
+│                                   (ランダムアーキテクチャ比、テストリグレット)
+└── sysbio/    reaction_network_inference = 反応集合の適合率・再現率・F1(modifier あり / なし)
+                                   + 時系列の bounded sMAPE、インスタンス平均(SciGym の採点規約)
 ```
 
 NAS は「アーキテクチャの性能をいつ測るか」で 2 タスクに分かれる:
@@ -58,6 +60,7 @@ airas-eval validate nas_post_training --inputs inputs.json   # 形式だけ検�
 
 - [`tasks/generic/README.md`](src/airas_eval/tasks/generic/README.md) — 汎用の評価ファミリー
 - [`tasks/nas/README.md`](src/airas_eval/tasks/nas/README.md) — NAS の 2 タスク
+- [`tasks/sysbio/README.md`](src/airas_eval/tasks/sysbio/README.md) — システム生物学の反応ネットワーク推定
 
 **各指標の説明(定義、読み方、高低どちらが良いか)はこれらの README の表に載っている。**
 タスクやバンドルを変更したら `python -m airas_eval.tasks.readme` で再生成する。
