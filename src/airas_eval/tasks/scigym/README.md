@@ -10,15 +10,15 @@
 
 | タスクタイプ | 指標数 | うち曲線 |
 |---|---|---|
-| [`scigym_small`](#scigymsmall) | 9 | 0 |
+| [`scigym_small`](#scigymsmall) | 15 | 0 |
 
 ### `scigym_small`
 
-署名: `scigym_small/v1@59b1839e37d6`
+署名: `scigym_small/v1@139c6084495c`
 
-SciGym-small ベンチマーク(Duan et al. 2025)。反応をすべて取り除いた SBML モデルを渡されたエージェントが、摂動実験の時系列から反応を推定して提出したモデルを、 SciGym 公式の Evaluator でそのまま採点する。データ(137 件の truth / partial / sedml)は公式リリースの sha256 で固定し、指標は論文 Table 1 と同じ定義。最良の公表値との差も返す。
+SciGym-small ベンチマーク(Duan et al. 2025)。反応をすべて取り除いた SBML モデルを渡されたエージェントが、摂動実験の時系列から反応を推定して提出したモデルを、 SciGym 公式の Evaluator でそのまま採点する。指標は論文の 3 つ: STE(軌道の sMAPE)、 RMS(反応の一致の P/R/F1、modifier なしと modifier ありの厳格版)、NTS(種間エッジの P/R/F1 とエッジ型別の F1)。データ(137 件の truth / partial / sedml)は公式リリースの sha256 で固定し、Table 1 の最良の公表値との差も返す。
 
-規約: SciGym 公式 Evaluator(コミット 88a7b93)による採点。反応の一致は種 ID の集合で判定し、追加反応か欠損反応が空なら 0 点。軌道誤差は |pred - true| / (|pred| + |true|) の全種・全時点平均。提出が無い・無効なインスタンスは不完全モデルの採点値。全指標はインスタンスの単純平均。
+規約: SciGym 公式 Evaluator(コミット 88a7b93)による採点。論文の 3 指標 STE / RMS(modifier あり・なし)/ NTS。反応の一致は種 ID の集合で判定し、追加反応か欠損反応が空なら 0 点。軌道誤差は |pred - true| / (|pred| + |true|) の全種・全時点平均。NTS は種間エッジの集合の P/R/F1 で、真のモデルにエッジが無いインスタンスは未定義として平均から除く。提出が無い・無効なインスタンスは不完全モデルの採点値。全指標はインスタンスの単純平均。
 
 | 入力 | 説明 |
 |---|---|
@@ -26,13 +26,19 @@ SciGym-small ベンチマーク(Duan et al. 2025)。反応をすべて取り除�
 
 | 指標 | 必要な入力 | 値域 | 良い方向 | 説明 | 実装 | 固定パラメータ |
 |---|---|---|---|---|---|---|
-| `trajectory_smape` | `instances` | [0, 1] | 低いほど良い | 軌道誤差(STE)。提出モデルと真のモデルの時系列の sMAPE をインスタンスで平均した値。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='observe_smape' |
-| `reaction_precision` | `instances` | [0, 1] | 高いほど良い | 反応の適合率(インスタンス平均)。追加した反応のうち反応物と生成物の集合が一致したものの割合。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rp_precision' |
-| `reaction_recall` | `instances` | [0, 1] | 高いほど良い | 反応の再現率(インスタンス平均)。取り除かれていた反応のうち一致するものが提出された割合。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rp_recall' |
-| `reaction_f1` | `instances` | [0, 1] | 高いほど良い | 反応の F1(インスタンス平均)。適合率と再現率の調和平均。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rp_f1' |
-| `reaction_precision_with_modifiers` | `instances` | [0, 1] | 高いほど良い | 反応の適合率(インスタンス平均、modifier の集合の一致も要求する厳格版)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rpm_precision' |
-| `reaction_recall_with_modifiers` | `instances` | [0, 1] | 高いほど良い | 反応の再現率(インスタンス平均、厳格版)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rpm_recall' |
-| `reaction_f1_with_modifiers` | `instances` | [0, 1] | 高いほど良い | 反応の F1(インスタンス平均、厳格版)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rpm_f1' |
+| `trajectory_smape` | `instances` | [0, 1] | 低いほど良い | STE(Simulation Trajectory Error)。提出モデルと真のモデルを同じ条件でシミュレートした全種の時系列の sMAPE をインスタンスで平均した値。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='observe_smape' |
+| `reaction_precision` | `instances` | [0, 1] | 高いほど良い | RMS(Reaction Matching Score)の適合率、modifier なし。追加した反応のうち、反応物と生成物の集合が欠損反応と一致したものの割合(インスタンス平均)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rp_precision' |
+| `reaction_recall` | `instances` | [0, 1] | 高いほど良い | RMS の再現率、modifier なし。欠損反応のうち、反応物と生成物の集合が一致する反応が提出された割合(インスタンス平均)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rp_recall' |
+| `reaction_f1` | `instances` | [0, 1] | 高いほど良い | RMS の F1、modifier なし。適合率と再現率の調和平均(インスタンス平均)。論文 Table 1 の RMS without modifiers。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rp_f1' |
+| `reaction_precision_with_modifiers` | `instances` | [0, 1] | 高いほど良い | RMS の適合率、modifier あり。反応物・生成物に加えて modifier の集合の一致も要求する厳格版(インスタンス平均)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rpm_precision' |
+| `reaction_recall_with_modifiers` | `instances` | [0, 1] | 高いほど良い | RMS の再現率、modifier あり(厳格版、インスタンス平均)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rpm_recall' |
+| `reaction_f1_with_modifiers` | `instances` | [0, 1] | 高いほど良い | RMS の F1、modifier あり(厳格版、インスタンス平均)。論文 Table 1 の RMS with modifiers。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='rpm_f1' |
+| `topology_precision` | `instances` | [0, 1] | 高いほど良い | NTS(Network Topology Score)の適合率。種と種の相互作用(反応物-生成物、反応物-modifier、modifier-生成物の無向エッジ、同じ組は 1 回だけ数える)のうち真のモデルにもあるものの割合(インスタンス平均)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='species_edges_undirected_precision' |
+| `topology_recall` | `instances` | [0, 1] | 高いほど良い | NTS の再現率。真のモデルの種間エッジのうち提出モデルにもあるものの割合(インスタンス平均)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='species_edges_undirected_recall' |
+| `topology_f1` | `instances` | [0, 1] | 高いほど良い | NTS の F1。種間エッジの適合率と再現率の調和平均(インスタンス平均)。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='species_edges_undirected_f1' |
+| `topology_f1_reactant_product` | `instances` | [0, 1] | 高いほど良い | NTS の F1 を反応物→生成物のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='reactant_product_f1' |
+| `topology_f1_reactant_modifier` | `instances` | [0, 1] | 高いほど良い | NTS の F1 を反応物→modifier のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='reactant_modifier_f1' |
+| `topology_f1_modifier_product` | `instances` | [0, 1] | 高いほど良い | NTS の F1 を modifier→生成物のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。 | `airas_eval.tasks.scigym._metric_sets.mean_score` | key='modifier_product_f1' |
 | `trajectory_smape_vs_best_published` | `instances` | [-1, 1] | 低いほど良い | STE と論文 Table 1 の最良値(Gemini-2.5-Pro、0.3212)との差。負なら公表値を上回る。 | `airas_eval.tasks.scigym._metric_sets.gap_to_best_published` | key='observe_smape', metric='trajectory_smape' |
 | `reaction_f1_vs_best_published` | `instances` | [-1, 1] | 高いほど良い | 反応 F1 と論文 Table 1 の最良値(Gemini-2.5-Pro、0.3383)との差。正なら公表値を上回る。 | `airas_eval.tasks.scigym._metric_sets.gap_to_best_published` | key='rp_f1', metric='reaction_f1' |
 

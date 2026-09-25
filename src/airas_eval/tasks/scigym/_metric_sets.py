@@ -1,9 +1,23 @@
 """SciGym-small scored by SciGym's own ``Evaluator`` — the benchmark's
 official implementation (Duan et al. 2025, github.com/h4duan/SciGym), pinned
-to one commit. The evaluator simulates the reference and submitted models
-itself (libroadrunner), so ``scigym`` and its simulator stack must be
-installed from that commit; otherwise every metric is skipped as a missing
-dependency. Table 1 of the paper is carried here as the published reference,
+to one commit. The paper's three metrics, all from that implementation:
+
+* STE (Simulation Trajectory Error) — sMAPE between the simulated
+  trajectories of the submitted and the true model (``trajectory_smape``);
+* RMS (Reaction Matching Score) — precision / recall / F1 of the added
+  reactions against the removed ones, matched by reactant and product sets
+  (``reaction_*``) and, in the stricter variant, by modifier sets too
+  (``reaction_*_with_modifiers``);
+* NTS (Network Topology Score) — precision / recall / F1 of species-species
+  interaction edges, each pair counted once (``topology_*``), plus the F1 per
+  edge type (reactant-product, reactant-modifier, modifier-product).
+
+The Controller's own end-of-run scoring writes STE and RMS; NTS comes from
+the Evaluator's ``evaluate_species_interaction`` and the ``species_edges``
+function, which this pack calls in addition. The evaluator simulates the
+reference and submitted models itself (libroadrunner), so ``scigym`` and its
+simulator stack must be installed from that commit; otherwise every metric
+is skipped as a missing dependency. Table 1 of the paper is carried here as the published reference,
 so a report says at once how far a run is from the best published number.
 """
 
@@ -16,6 +30,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
+from airas_eval.exceptions import UndefinedMetric
 from airas_eval.spec import MetricBinding, MetricSet
 
 SCIGYM_COMMIT = "88a7b93609e35b6ecb4eb343d816d6ff09256c6a"
@@ -65,7 +80,7 @@ _FILES = (
 _cache: dict[str, list[dict[str, Any]]] = {}
 
 
-def _scigym() -> tuple[Any, Any, Any]:
+def _scigym() -> tuple[Any, Any, Any, Any]:
     """Import the pinned SciGym; an ImportError becomes a MISSING_DEPENDENCY skip."""
     try:
         origin = json.loads(
@@ -89,8 +104,9 @@ def _scigym() -> tuple[Any, Any, Any]:
     from scigym.data import SBML
     from scigym.data.question import Question
     from scigym.eval import Evaluator
+    from scigym.eval.utils import evaluate_species_interaction_f1
 
-    return SBML, Question, Evaluator
+    return SBML, Question, Evaluator, evaluate_species_interaction_f1
 
 
 def official_scores(instances: Instances) -> list[dict[str, Any]]:
@@ -100,7 +116,7 @@ def official_scores(instances: Instances) -> list[dict[str, Any]]:
     key = hashlib.sha256(json.dumps(instances, sort_keys=True).encode()).hexdigest()
     if key in _cache:
         return _cache[key]
-    SBML, Question, Evaluator = _scigym()
+    SBML, Question, Evaluator, species_edges_f1 = _scigym()
     scores = []
     for instance in instances:
         with tempfile.TemporaryDirectory() as tmp:
@@ -114,22 +130,32 @@ def official_scores(instances: Instances) -> list[dict[str, Any]]:
                 incomplete_sbml=question.get_partial_sbml(),
                 incomplete_runnable_sbml=question.get_runnable_partial_sbml(),
             )
+            pred = evaluator.incomplete_sbml
             try:
                 if not instance.get("submitted_sbml"):
                     raise ValueError("no submission")
-                result = evaluator(pred_sbml=SBML(instance["submitted_sbml"])).to_dict()
+                submitted = SBML(instance["submitted_sbml"])
+                result = evaluator(pred_sbml=submitted).to_dict()
                 result["success"] = True
+                pred = submitted
             except Exception:  # noqa: BLE001 - 公式 Controller と同じく無効な提出は不完全モデルで採点
-                result = evaluator(pred_sbml=evaluator.incomplete_sbml).to_dict()
+                result = evaluator(pred_sbml=pred).to_dict()
                 result["success"] = False
+            # NTS: Controller は呼ばないが Evaluator が持つ公式実装。真のエッジが無い型は None
+            result |= species_edges_f1(evaluator.true_sbml.model, pred.model)
+            result |= evaluator.evaluate_species_interaction(pred)
         scores.append(result)
     _cache[key] = scores
     return scores
 
 
 def mean_score(instances: Instances, key: str) -> float:
-    scores = official_scores(instances)
-    return float(sum(s[key] for s in scores) / len(scores))
+    """Mean over the instances where the official score is defined (NTS is
+    None for an instance whose true model has no edge of that type)."""
+    values = [s[key] for s in official_scores(instances) if s[key] is not None]
+    if not values:
+        raise UndefinedMetric(f"{key} is undefined on every instance")
+    return float(sum(values) / len(values))
 
 
 def gap_to_best_published(instances: Instances, key: str, metric: str) -> float:
@@ -166,51 +192,88 @@ def _metric(name: str, key: str, description: str, direction: str) -> MetricBind
 SCIGYM_SMALL = MetricSet(
     provenance_packages=("scigym", "libroadrunner", "python-libsbml"),
     notes=(
-        f"SciGym 公式 Evaluator(コミット {SCIGYM_COMMIT[:7]})による採点。反応の一致は種 ID の集合で判定し、"
-        "追加反応か欠損反応が空なら 0 点。軌道誤差は |pred - true| / (|pred| + |true|) の全種・全時点平均。"
+        f"SciGym 公式 Evaluator(コミット {SCIGYM_COMMIT[:7]})による採点。論文の 3 指標 STE / RMS(modifier あり・なし)/ NTS。"
+        "反応の一致は種 ID の集合で判定し、追加反応か欠損反応が空なら 0 点。軌道誤差は |pred - true| / (|pred| + |true|) の"
+        "全種・全時点平均。NTS は種間エッジの集合の P/R/F1 で、真のモデルにエッジが無いインスタンスは未定義として平均から除く。"
         "提出が無い・無効なインスタンスは不完全モデルの採点値。全指標はインスタンスの単純平均"
     ),
     metrics=(
         _metric(
             "trajectory_smape",
             "observe_smape",
-            "軌道誤差(STE)。提出モデルと真のモデルの時系列の sMAPE をインスタンスで平均した値。",
+            "STE(Simulation Trajectory Error)。提出モデルと真のモデルを同じ条件でシミュレートした全種の時系列の sMAPE をインスタンスで平均した値。",
             "lower",
         ),
         _metric(
             "reaction_precision",
             "rp_precision",
-            "反応の適合率(インスタンス平均)。追加した反応のうち反応物と生成物の集合が一致したものの割合。",
+            "RMS(Reaction Matching Score)の適合率、modifier なし。追加した反応のうち、反応物と生成物の集合が欠損反応と一致したものの割合(インスタンス平均)。",
             "higher",
         ),
         _metric(
             "reaction_recall",
             "rp_recall",
-            "反応の再現率(インスタンス平均)。取り除かれていた反応のうち一致するものが提出された割合。",
+            "RMS の再現率、modifier なし。欠損反応のうち、反応物と生成物の集合が一致する反応が提出された割合(インスタンス平均)。",
             "higher",
         ),
         _metric(
             "reaction_f1",
             "rp_f1",
-            "反応の F1(インスタンス平均)。適合率と再現率の調和平均。",
+            "RMS の F1、modifier なし。適合率と再現率の調和平均(インスタンス平均)。論文 Table 1 の RMS without modifiers。",
             "higher",
         ),
         _metric(
             "reaction_precision_with_modifiers",
             "rpm_precision",
-            "反応の適合率(インスタンス平均、modifier の集合の一致も要求する厳格版)。",
+            "RMS の適合率、modifier あり。反応物・生成物に加えて modifier の集合の一致も要求する厳格版(インスタンス平均)。",
             "higher",
         ),
         _metric(
             "reaction_recall_with_modifiers",
             "rpm_recall",
-            "反応の再現率(インスタンス平均、厳格版)。",
+            "RMS の再現率、modifier あり(厳格版、インスタンス平均)。",
             "higher",
         ),
         _metric(
             "reaction_f1_with_modifiers",
             "rpm_f1",
-            "反応の F1(インスタンス平均、厳格版)。",
+            "RMS の F1、modifier あり(厳格版、インスタンス平均)。論文 Table 1 の RMS with modifiers。",
+            "higher",
+        ),
+        _metric(
+            "topology_precision",
+            "species_edges_undirected_precision",
+            "NTS(Network Topology Score)の適合率。種と種の相互作用(反応物-生成物、反応物-modifier、modifier-生成物の無向エッジ、同じ組は 1 回だけ数える)のうち真のモデルにもあるものの割合(インスタンス平均)。",
+            "higher",
+        ),
+        _metric(
+            "topology_recall",
+            "species_edges_undirected_recall",
+            "NTS の再現率。真のモデルの種間エッジのうち提出モデルにもあるものの割合(インスタンス平均)。",
+            "higher",
+        ),
+        _metric(
+            "topology_f1",
+            "species_edges_undirected_f1",
+            "NTS の F1。種間エッジの適合率と再現率の調和平均(インスタンス平均)。",
+            "higher",
+        ),
+        _metric(
+            "topology_f1_reactant_product",
+            "reactant_product_f1",
+            "NTS の F1 を反応物→生成物のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。",
+            "higher",
+        ),
+        _metric(
+            "topology_f1_reactant_modifier",
+            "reactant_modifier_f1",
+            "NTS の F1 を反応物→modifier のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。",
+            "higher",
+        ),
+        _metric(
+            "topology_f1_modifier_product",
+            "modifier_product_f1",
+            "NTS の F1 を modifier→生成物のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。",
             "higher",
         ),
         MetricBinding(

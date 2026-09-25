@@ -35,7 +35,7 @@ tasks/
 │              │                    探索空間内順位、ランダム探索比、上位 10% 相関)
 │              └── nas_post_training = classification + multiobjective の全指標 + NAS 追加分
 │                                   (ランダムアーキテクチャ比、テストリグレット)
-└── scigym/    scigym_small = SciGym 公式 Evaluator(コミット固定)による STE と反応 P/R/F1、
+└── scigym/    scigym_small = SciGym 公式 Evaluator(コミット固定)による STE、RMS(modifier あり / なし)、NTS、
                               137 件のデータをハッシュで固定、論文 Table 1 の最良値との差
 ```
 
