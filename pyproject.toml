@@ -1,6 +1,6 @@
 [project]
 name = "airas-eval"
-version = "0.12.1"
+version = "0.12.2"
 description = "Trusted evaluation layer for AIRAS: the full fixed set of standard metrics per task type, computed from raw predictions"
 readme = "README.md"
 license = "MIT"
@@ -21,7 +21,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "numpy>=1.26",
+    "numpy>=1.26,<2.4",  # 2.4 の型スタブは PEP 695 を使い、mypy の 3.10 ターゲットで解釈できない
     "scikit-learn>=1.5",
     "scipy>=1.11",
     "pydantic>=2.7",
