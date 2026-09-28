@@ -18,7 +18,9 @@ that.
 """
 
 import argparse
+import gzip
 import json
+import os
 import sys
 import textwrap
 import unicodedata
@@ -35,7 +37,12 @@ from airas_eval.tasks import TASKS
 
 
 def _load(path: str) -> Any:
-    with open(path) as f:
+    # 入力が大きいとき（SciGym-large の評価入力は 100 MB 近い）は .json.gz で置ける。
+    # 呼び出し側が .json を指しても隣の .json.gz を読む
+    if not os.path.exists(path) and os.path.exists(path + ".gz"):
+        path += ".gz"
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8") as f:
         return json.load(f)
 
 
