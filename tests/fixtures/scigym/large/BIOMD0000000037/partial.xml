@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbml xmlns="http://www.sbml.org/sbml/level2" level="2" version="1">
+  <model id="id_uxiu">
+    <listOfUnitDefinitions>
+      <unitDefinition id="id_l1oz">
+        <listOfUnits>
+          <unit kind="second" multiplier="3600"/>
+        </listOfUnits>
+      </unitDefinition>
+    </listOfUnitDefinitions>
+    <listOfCompartments>
+      <compartment id="id_akl9" size="1"/>
+    </listOfCompartments>
+    <listOfSpecies>
+      <species id="id_mvl4" compartment="id_akl9" initialAmount="0"/>
+      <species id="id_dpcy" compartment="id_akl9" initialAmount="10"/>
+      <species id="id_thh2" compartment="id_akl9" initialAmount="0"/>
+      <species id="id_5qqo" compartment="id_akl9" initialAmount="200"/>
+      <species id="id_0wnr" compartment="id_akl9" initialAmount="0"/>
+      <species id="id_3u0u" compartment="id_akl9" initialAmount="0.9"/>
+      <species id="id_kbri" compartment="id_akl9" initialAmount="30"/>
+      <species id="id_0338" compartment="id_akl9" initialAmount="0"/>
+      <species id="id_29af" compartment="id_akl9" initialAmount="0" boundaryCondition="true"/>
+      <species id="id_xesb" compartment="id_akl9" initialAmount="0"/>
+      <species id="id_1sty" compartment="id_akl9" initialAmount="6"/>
+      <species id="id_k4hs" compartment="id_akl9" initialAmount="0"/>
+    </listOfSpecies>
+  </model>
+</sbml>

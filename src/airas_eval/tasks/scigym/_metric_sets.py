@@ -189,129 +189,147 @@ def _metric(name: str, key: str, description: str, direction: str) -> MetricBind
     )
 
 
+_NOTES = (
+    f"SciGym 公式 Evaluator(コミット {SCIGYM_COMMIT[:7]})による採点。論文の 3 指標 STE / RMS(modifier あり・なし)/ NTS。"
+    "反応の一致は種 ID の集合で判定し、追加反応か欠損反応が空なら 0 点。軌道誤差は |pred - true| / (|pred| + |true|) の"
+    "全種・全時点平均。NTS は種間エッジの集合の P/R/F1 で、真のモデルにエッジが無いインスタンスは未定義として平均から除く。"
+    "提出が無い・無効なインスタンスは不完全モデルの採点値。全指標はインスタンスの単純平均"
+)
+_PROVENANCE = ("scigym", "libroadrunner", "python-libsbml")
+_METRICS = (
+    _metric(
+        "trajectory_smape",
+        "observe_smape",
+        "STE(Simulation Trajectory Error)。提出モデルと真のモデルを同じ条件でシミュレートした全種の時系列の sMAPE をインスタンスで平均した値。",
+        "lower",
+    ),
+    _metric(
+        "reaction_precision",
+        "rp_precision",
+        "RMS(Reaction Matching Score)の適合率、modifier なし。追加した反応のうち、反応物と生成物の集合が欠損反応と一致したものの割合(インスタンス平均)。",
+        "higher",
+    ),
+    _metric(
+        "reaction_recall",
+        "rp_recall",
+        "RMS の再現率、modifier なし。欠損反応のうち、反応物と生成物の集合が一致する反応が提出された割合(インスタンス平均)。",
+        "higher",
+    ),
+    _metric(
+        "reaction_f1",
+        "rp_f1",
+        "RMS の F1、modifier なし。適合率と再現率の調和平均(インスタンス平均)。論文 Table 1 の RMS without modifiers。",
+        "higher",
+    ),
+    _metric(
+        "reaction_precision_with_modifiers",
+        "rpm_precision",
+        "RMS の適合率、modifier あり。反応物・生成物に加えて modifier の集合の一致も要求する厳格版(インスタンス平均)。",
+        "higher",
+    ),
+    _metric(
+        "reaction_recall_with_modifiers",
+        "rpm_recall",
+        "RMS の再現率、modifier あり(厳格版、インスタンス平均)。",
+        "higher",
+    ),
+    _metric(
+        "reaction_f1_with_modifiers",
+        "rpm_f1",
+        "RMS の F1、modifier あり(厳格版、インスタンス平均)。論文 Table 1 の RMS with modifiers。",
+        "higher",
+    ),
+    _metric(
+        "topology_precision",
+        "species_edges_undirected_precision",
+        "NTS(Network Topology Score)の適合率。種と種の相互作用(反応物-生成物、反応物-modifier、modifier-生成物の無向エッジ、同じ組は 1 回だけ数える)のうち真のモデルにもあるものの割合(インスタンス平均)。",
+        "higher",
+    ),
+    _metric(
+        "topology_recall",
+        "species_edges_undirected_recall",
+        "NTS の再現率。真のモデルの種間エッジのうち提出モデルにもあるものの割合(インスタンス平均)。",
+        "higher",
+    ),
+    _metric(
+        "topology_f1",
+        "species_edges_undirected_f1",
+        "NTS の F1。種間エッジの適合率と再現率の調和平均(インスタンス平均)。",
+        "higher",
+    ),
+    _metric(
+        "topology_f1_reactant_product",
+        "reactant_product_f1",
+        "NTS の F1 を反応物→生成物のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。",
+        "higher",
+    ),
+    _metric(
+        "topology_f1_reactant_modifier",
+        "reactant_modifier_f1",
+        "NTS の F1 を反応物→modifier のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。",
+        "higher",
+    ),
+    _metric(
+        "topology_f1_modifier_product",
+        "modifier_product_f1",
+        "NTS の F1 を modifier→生成物のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。",
+        "higher",
+    ),
+)
+_GAP_TO_TABLE1 = (
+    MetricBinding(
+        "trajectory_smape_vs_best_published",
+        gap_to_best_published,
+        _IN,
+        {"key": "observe_smape", "metric": "trajectory_smape"},
+        description=f"STE と論文 Table 1 の最良値(Gemini-2.5-Pro、{BEST_PUBLISHED['trajectory_smape']})との差。負なら公表値を上回る。",
+        value_range="[-1, 1]",
+        direction="lower",
+    ),
+    MetricBinding(
+        "reaction_f1_vs_best_published",
+        gap_to_best_published,
+        _IN,
+        {"key": "rp_f1", "metric": "reaction_f1"},
+        description=f"反応 F1 と論文 Table 1 の最良値(Gemini-2.5-Pro、{BEST_PUBLISHED['reaction_f1']})との差。正なら公表値を上回る。",
+        value_range="[-1, 1]",
+        direction="higher",
+    ),
+)
+_SUMMARY = (
+    MetricBinding(
+        "n_instances", n_instances, _IN, description="評価したインスタンス数。"
+    ),
+    MetricBinding(
+        "n_valid_submissions",
+        n_valid_submissions,
+        _IN,
+        description="有効な SBML が提出され、そのまま採点されたインスタンス数。",
+    ),
+)
+_PER_EXAMPLE = (
+    MetricBinding(
+        "trajectory_fit",
+        trajectory_fit,
+        _IN,
+        description="インスタンスごとの 1 - 軌道誤差(高いほど良い)。2 システムのペア比較(compare)に使う。",
+    ),
+)
+
 SCIGYM_SMALL = MetricSet(
-    provenance_packages=("scigym", "libroadrunner", "python-libsbml"),
-    notes=(
-        f"SciGym 公式 Evaluator(コミット {SCIGYM_COMMIT[:7]})による採点。論文の 3 指標 STE / RMS(modifier あり・なし)/ NTS。"
-        "反応の一致は種 ID の集合で判定し、追加反応か欠損反応が空なら 0 点。軌道誤差は |pred - true| / (|pred| + |true|) の"
-        "全種・全時点平均。NTS は種間エッジの集合の P/R/F1 で、真のモデルにエッジが無いインスタンスは未定義として平均から除く。"
-        "提出が無い・無効なインスタンスは不完全モデルの採点値。全指標はインスタンスの単純平均"
-    ),
-    metrics=(
-        _metric(
-            "trajectory_smape",
-            "observe_smape",
-            "STE(Simulation Trajectory Error)。提出モデルと真のモデルを同じ条件でシミュレートした全種の時系列の sMAPE をインスタンスで平均した値。",
-            "lower",
-        ),
-        _metric(
-            "reaction_precision",
-            "rp_precision",
-            "RMS(Reaction Matching Score)の適合率、modifier なし。追加した反応のうち、反応物と生成物の集合が欠損反応と一致したものの割合(インスタンス平均)。",
-            "higher",
-        ),
-        _metric(
-            "reaction_recall",
-            "rp_recall",
-            "RMS の再現率、modifier なし。欠損反応のうち、反応物と生成物の集合が一致する反応が提出された割合(インスタンス平均)。",
-            "higher",
-        ),
-        _metric(
-            "reaction_f1",
-            "rp_f1",
-            "RMS の F1、modifier なし。適合率と再現率の調和平均(インスタンス平均)。論文 Table 1 の RMS without modifiers。",
-            "higher",
-        ),
-        _metric(
-            "reaction_precision_with_modifiers",
-            "rpm_precision",
-            "RMS の適合率、modifier あり。反応物・生成物に加えて modifier の集合の一致も要求する厳格版(インスタンス平均)。",
-            "higher",
-        ),
-        _metric(
-            "reaction_recall_with_modifiers",
-            "rpm_recall",
-            "RMS の再現率、modifier あり(厳格版、インスタンス平均)。",
-            "higher",
-        ),
-        _metric(
-            "reaction_f1_with_modifiers",
-            "rpm_f1",
-            "RMS の F1、modifier あり(厳格版、インスタンス平均)。論文 Table 1 の RMS with modifiers。",
-            "higher",
-        ),
-        _metric(
-            "topology_precision",
-            "species_edges_undirected_precision",
-            "NTS(Network Topology Score)の適合率。種と種の相互作用(反応物-生成物、反応物-modifier、modifier-生成物の無向エッジ、同じ組は 1 回だけ数える)のうち真のモデルにもあるものの割合(インスタンス平均)。",
-            "higher",
-        ),
-        _metric(
-            "topology_recall",
-            "species_edges_undirected_recall",
-            "NTS の再現率。真のモデルの種間エッジのうち提出モデルにもあるものの割合(インスタンス平均)。",
-            "higher",
-        ),
-        _metric(
-            "topology_f1",
-            "species_edges_undirected_f1",
-            "NTS の F1。種間エッジの適合率と再現率の調和平均(インスタンス平均)。",
-            "higher",
-        ),
-        _metric(
-            "topology_f1_reactant_product",
-            "reactant_product_f1",
-            "NTS の F1 を反応物→生成物のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。",
-            "higher",
-        ),
-        _metric(
-            "topology_f1_reactant_modifier",
-            "reactant_modifier_f1",
-            "NTS の F1 を反応物→modifier のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。",
-            "higher",
-        ),
-        _metric(
-            "topology_f1_modifier_product",
-            "modifier_product_f1",
-            "NTS の F1 を modifier→生成物のエッジだけで計算した値。真のモデルにこの型のエッジが無いインスタンスは除いて平均。",
-            "higher",
-        ),
-        MetricBinding(
-            "trajectory_smape_vs_best_published",
-            gap_to_best_published,
-            _IN,
-            {"key": "observe_smape", "metric": "trajectory_smape"},
-            description=f"STE と論文 Table 1 の最良値(Gemini-2.5-Pro、{BEST_PUBLISHED['trajectory_smape']})との差。負なら公表値を上回る。",
-            value_range="[-1, 1]",
-            direction="lower",
-        ),
-        MetricBinding(
-            "reaction_f1_vs_best_published",
-            gap_to_best_published,
-            _IN,
-            {"key": "rp_f1", "metric": "reaction_f1"},
-            description=f"反応 F1 と論文 Table 1 の最良値(Gemini-2.5-Pro、{BEST_PUBLISHED['reaction_f1']})との差。正なら公表値を上回る。",
-            value_range="[-1, 1]",
-            direction="higher",
-        ),
-    ),
-    summary=(
-        MetricBinding(
-            "n_instances", n_instances, _IN, description="評価したインスタンス数。"
-        ),
-        MetricBinding(
-            "n_valid_submissions",
-            n_valid_submissions,
-            _IN,
-            description="有効な SBML が提出され、そのまま採点されたインスタンス数。",
-        ),
-    ),
-    per_example=(
-        MetricBinding(
-            "trajectory_fit",
-            trajectory_fit,
-            _IN,
-            description="インスタンスごとの 1 - 軌道誤差(高いほど良い)。2 システムのペア比較(compare)に使う。",
-        ),
-    ),
+    provenance_packages=_PROVENANCE,
+    notes=_NOTES,
+    metrics=_METRICS + _GAP_TO_TABLE1,
+    summary=_SUMMARY,
+    per_example=_PER_EXAMPLE,
+)
+
+# large split は論文に公表値が無いので Table 1 との差は持たない
+SCIGYM_LARGE = MetricSet(
+    provenance_packages=_PROVENANCE,
+    notes=_NOTES
+    + "。large split(213 件)には論文の公表値が無く、Table 1 との差は返さない",
+    metrics=_METRICS,
+    summary=_SUMMARY,
+    per_example=_PER_EXAMPLE,
 )

@@ -1,11 +1,12 @@
-"""SciGym-small inputs: the benchmark's own files per instance, plus the
-submitted model. The reference files are pinned by sha256 (``small_manifest.json``,
-generated from the official release), so a run cannot quietly score against
-a different dataset."""
+"""SciGym inputs: the benchmark's own files per instance, plus the
+submitted model. The reference files are pinned by sha256 (``small_manifest.json`` /
+``large_manifest.json``, generated from the official release), so a run cannot
+quietly score against a different dataset."""
 
 import hashlib
 import json
 from pathlib import Path
+from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -14,13 +15,16 @@ from airas_eval.tasks.generic._inputs import TaskInputs
 MANIFEST: dict[str, dict[str, str]] = json.loads(
     (Path(__file__).parent / "small_manifest.json").read_text()
 )
+LARGE_MANIFEST: dict[str, dict[str, str]] = json.loads(
+    (Path(__file__).parent / "large_manifest.json").read_text()
+)
 
 
 class Instance(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(
-        description="BioModels ID(BIOMD0000000027 など)。SciGym-small の 137 件のいずれか。"
+        description="BioModels ID(BIOMD0000000027 など)。その split(small 137 件 / large 213 件)のいずれか。"
     )
     reference_sbml: str = Field(
         description="真のモデル(truth.xml の内容)。公式データと sha256 で照合される。"
@@ -41,6 +45,8 @@ class ScigymSmallInputs(TaskInputs):
     """SciGym-small: インスタンスごとに公式の 3 ファイルと提出モデル。ID は 137 件の中から
     重複なく、ファイル内容は公式リリース(h4duan/scigym-sbml の small split)と一致すること。"""
 
+    split: ClassVar[str] = "small"
+    manifest: ClassVar[dict[str, dict[str, str]]] = MANIFEST
     instances: list[Instance] = Field(
         description="評価するインスタンス。全件(137)でなくてもよく、件数は n_instances で報告される。"
     )
@@ -53,9 +59,9 @@ class ScigymSmallInputs(TaskInputs):
         if len(set(ids)) != len(ids):
             raise ValueError("instance ids must be unique")
         for instance in self.instances:
-            expected = MANIFEST.get(instance.id)
+            expected = self.manifest.get(instance.id)
             if expected is None:
-                raise ValueError(f"{instance.id} is not in SciGym-small")
+                raise ValueError(f"{instance.id} is not in SciGym-{self.split}")
             for field, name in (
                 ("reference_sbml", "truth.xml"),
                 ("incomplete_sbml", "partial.xml"),
@@ -67,3 +73,13 @@ class ScigymSmallInputs(TaskInputs):
                         f"{instance.id}/{name} differs from the official release"
                     )
         return self
+
+
+class ScigymLargeInputs(ScigymSmallInputs):
+    """SciGym-large: 公式リリースの large split(213 件、small と重複なし)。照合の仕方は small と同じ。"""
+
+    split: ClassVar[str] = "large"
+    manifest: ClassVar[dict[str, dict[str, str]]] = LARGE_MANIFEST
+    instances: list[Instance] = Field(
+        description="評価するインスタンス。全件(213)でなくてもよく、件数は n_instances で報告される。"
+    )

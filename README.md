@@ -35,8 +35,8 @@ tasks/
 │              │                    探索空間内順位、ランダム探索比、上位 10% 相関)
 │              └── nas_post_training = classification + multiobjective の全指標 + NAS 追加分
 │                                   (ランダムアーキテクチャ比、テストリグレット)
-└── scigym/    scigym_small = SciGym 公式 Evaluator(コミット固定)による STE、RMS(modifier あり / なし)、NTS、
-                              137 件のデータをハッシュで固定、論文 Table 1 の最良値との差
+└── scigym/    scigym_small / scigym_large = SciGym 公式 Evaluator(コミット固定)による STE、RMS(modifier あり / なし)、NTS、
+                              137 / 213 件のデータをハッシュで固定、small は論文 Table 1 の最良値との差も
 ```
 
 ベンチマークパックの依存は extra で持つ(`airas-eval[scigym]` = SciGym の固定コミット + pygraphviz)。
@@ -80,7 +80,7 @@ airas-eval validate nas_post_training --inputs inputs.json   # 形式だけ検�
 
 - [`tasks/generic/README.md`](src/airas_eval/tasks/generic/README.md) — 汎用の評価ファミリー
 - [`tasks/nas/README.md`](src/airas_eval/tasks/nas/README.md) — NAS の 2 タスク
-- [`tasks/scigym/README.md`](src/airas_eval/tasks/scigym/README.md) — SciGym-small ベンチマークパック
+- [`tasks/scigym/README.md`](src/airas_eval/tasks/scigym/README.md) — SciGym-small / large ベンチマークパック
 
 **各指標の説明(定義、読み方、高低どちらが良いか)はこれらの README の表に載っている。**
 タスクやバンドルを変更したら `python -m airas_eval.tasks.readme` で再生成する。

@@ -4,10 +4,13 @@ from pathlib import Path
 import pytest
 
 from airas_eval import evaluate, validate_inputs
-from airas_eval.tasks.scigym._inputs import MANIFEST
+from airas_eval.tasks.scigym._inputs import LARGE_MANIFEST, MANIFEST
 from airas_eval.tasks.scigym._metric_sets import PUBLISHED, official_scores
 
 FIXTURE = Path(__file__).parent / "fixtures" / "scigym" / "BIOMD0000000027"
+LARGE_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "scigym" / "large" / "BIOMD0000000037"
+)
 
 
 def _instance(submitted=None):
@@ -16,6 +19,16 @@ def _instance(submitted=None):
         "reference_sbml": (FIXTURE / "truth.xml").read_text(),
         "incomplete_sbml": (FIXTURE / "partial.xml").read_text(),
         "reference_sedml": (FIXTURE / "truth.sedml").read_text(),
+        "submitted_sbml": submitted,
+    }
+
+
+def _large_instance(submitted=None):
+    return {
+        "id": "BIOMD0000000037",
+        "reference_sbml": (LARGE_FIXTURE / "truth.xml").read_text(),
+        "incomplete_sbml": (LARGE_FIXTURE / "partial.xml").read_text(),
+        "reference_sedml": (LARGE_FIXTURE / "truth.sedml").read_text(),
         "submitted_sbml": submitted,
     }
 
@@ -42,6 +55,18 @@ def test_inputs_must_be_the_official_files():
         validate_inputs("scigym_small", {"instances": [dict(_instance(), id="BIOMD9")]})
     with pytest.raises(ValueError, match="unique"):
         validate_inputs("scigym_small", {"instances": [_instance(), _instance()]})
+
+
+def test_manifest_pins_the_large_split():
+    assert len(LARGE_MANIFEST) == 213
+    assert not set(LARGE_MANIFEST) & set(MANIFEST)
+    validate_inputs("scigym_large", {"instances": [_large_instance()]})
+    tampered = _large_instance()
+    tampered["incomplete_sbml"] += "\n"
+    with pytest.raises(ValueError, match="differs from the official release"):
+        validate_inputs("scigym_large", {"instances": [tampered]})
+    with pytest.raises(ValueError, match="not in SciGym-large"):
+        validate_inputs("scigym_large", {"instances": [_instance()]})
 
 
 def test_published_table_rows():
@@ -109,3 +134,13 @@ def test_missing_or_invalid_submission_scores_the_incomplete_model():
     assert none == invalid
     assert none["reaction_f1"] == 0.0
     assert 0 < none["trajectory_smape"] < 1
+
+
+@pytest.mark.skipif(not _scigym_installed(), reason="needs scigym at the pinned commit")
+def test_large_scores_with_the_same_evaluator_and_no_published_gap():
+    report = evaluate("scigym_large", {"instances": [_large_instance(None)]})
+    assert not report.skipped["missing_dependency"], report.skipped
+    assert 0 < report.metrics["trajectory_smape"] < 1
+    assert report.metrics["reaction_f1"] == 0.0
+    assert "trajectory_smape_vs_best_published" not in report.metrics
+    assert report.inputs_summary["n_valid_submissions"] == 0
